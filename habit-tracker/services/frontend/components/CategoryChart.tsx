@@ -1,9 +1,11 @@
 'use client';
-// [review:need-review] PHASE-01/21-chart-cumulative-mode
-// summary: multi-line category chart - added Per day | Cumulative mode toggle (prefix sums via cumulate), mode survives period changes
+// [review:need-review] PHASE-01/23-checklist-bar-streaks
+// summary: category chart - line chart for form categories; for display_mode=checklist a done-count bar chart plus per-field current-streak badges
 
 import { useMemo, useState } from 'react';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -22,7 +24,12 @@ import {
   buildSeries,
   sliceByPeriod,
 } from '@/lib/chart-data';
-import { cumulate } from '@/lib/chart-utils';
+import {
+  booleanFields,
+  buildChecklistBarData,
+  cumulate,
+  currentStreak,
+} from '@/lib/chart-utils';
 
 type ChartMode = 'perDay' | 'cumulative';
 
@@ -44,12 +51,132 @@ const TOOLTIP_STYLE: React.CSSProperties = {
   color: '#f5f5f5',
 };
 
+const BAR_COLOR = '#b8ff36';
+const BAR_RADIUS: [number, number, number, number] = [6, 6, 0, 0];
+
 interface CategoryChartProps {
   category: Category;
   days: TableDay[];
 }
 
 export default function CategoryChart({ category, days }: CategoryChartProps) {
+  return category.display_mode === 'checklist' ? (
+    <ChecklistCategoryChart category={category} days={days} />
+  ) : (
+    <FormCategoryChart category={category} days={days} />
+  );
+}
+
+interface PeriodButtonsProps {
+  period: ChartPeriod;
+  onChange: (period: ChartPeriod) => void;
+}
+
+function PeriodButtons({ period, onChange }: PeriodButtonsProps) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Chart period">
+      {CHART_PERIODS.map((p) => (
+        <button
+          key={p}
+          onClick={() => onChange(p)}
+          aria-pressed={p === period}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
+            p === period
+              ? 'bg-lime text-background border-lime shadow-[0_0_18px_rgba(184,255,54,0.25)]'
+              : 'bg-surface text-text-secondary border-white/10 hover:text-text-primary hover:bg-white/5'
+          }`}
+        >
+          {PERIOD_LABELS[p]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChecklistCategoryChart({ category, days }: CategoryChartProps) {
+  const [period, setPeriod] = useState<ChartPeriod>(DEFAULT_PERIOD);
+
+  const boolFields = useMemo(() => booleanFields(category.fields), [category.fields]);
+  const data = useMemo(
+    () =>
+      sliceByPeriod(buildChecklistBarData(days, category.id, boolFields), period),
+    [days, category.id, boolFields, period]
+  );
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const streaks = useMemo(
+    () =>
+      boolFields.map((field) => ({
+        field,
+        streak: currentStreak(days, category.id, field.id, today),
+      })),
+    [boolFields, days, category.id, today]
+  );
+
+  const total = boolFields.length;
+
+  if (total === 0) {
+    return (
+      <div className="text-center py-16 bg-card border border-white/5 rounded-3xl">
+        <p className="text-text-secondary">
+          No boolean fields to chart in this category
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-white/5 rounded-3xl p-6 space-y-5">
+      <PeriodButtons period={period} onChange={setPeriod} />
+
+      <div className="flex flex-wrap gap-2" role="list" aria-label="Current streaks">
+        {streaks.map(({ field, streak }) => (
+          <div
+            key={field.id}
+            role="listitem"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-surface text-text-primary border border-white/10"
+          >
+            {field.name}
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-lime text-background">
+              {streak} {streak === 1 ? 'day' : 'days'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ height: CHART_HEIGHT_PX }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: AXIS_TICK_COLOR, fontSize: 12 }}
+              tickLine={false}
+              axisLine={{ stroke: GRID_COLOR }}
+              minTickGap={24}
+            />
+            <YAxis
+              domain={[0, total]}
+              allowDecimals={false}
+              tick={{ fill: AXIS_TICK_COLOR, fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              width={44}
+            />
+            <Tooltip
+              cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value) => [`${value} of ${total}`, 'Done']}
+              labelStyle={{ color: '#8a8a8a' }}
+            />
+            <Bar dataKey="done" fill={BAR_COLOR} radius={BAR_RADIUS} maxBarSize={28} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function FormCategoryChart({ category, days }: CategoryChartProps) {
   const [period, setPeriod] = useState<ChartPeriod>(DEFAULT_PERIOD);
   const [mode, setMode] = useState<ChartMode>('perDay');
   const [hiddenKeys, setHiddenKeys] = useState<readonly string[]>([]);
@@ -85,26 +212,7 @@ export default function CategoryChart({ category, days }: CategoryChartProps) {
 
   return (
     <div className="bg-card border border-white/5 rounded-3xl p-6 space-y-5">
-      <div
-        className="flex flex-wrap gap-2"
-        role="group"
-        aria-label="Chart period"
-      >
-        {CHART_PERIODS.map((p) => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            aria-pressed={p === period}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
-              p === period
-                ? 'bg-lime text-background border-lime shadow-[0_0_18px_rgba(184,255,54,0.25)]'
-                : 'bg-surface text-text-secondary border-white/10 hover:text-text-primary hover:bg-white/5'
-            }`}
-          >
-            {PERIOD_LABELS[p]}
-          </button>
-        ))}
-      </div>
+      <PeriodButtons period={period} onChange={setPeriod} />
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Chart mode">
         {CHART_MODES.map((m) => (

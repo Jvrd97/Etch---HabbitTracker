@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/20-category-page-chart
-// summary: pure helpers for the category chart - chartable fields, series/axis/unit assignment, cell parsing, per-day points, period slicing
+// [review:need-review] PHASE-01/23-checklist-bar-streaks
+// summary: pure helpers for the category chart - series/axis/unit assignment, cell parsing, per-day points; sliceByPeriod made generic for checklist bar points
 
 import type { Field, TableDay } from './api';
 
@@ -139,7 +139,7 @@ export function chartDateRange(today: Date): { from: string; to: string } {
 }
 
 /** Keep the last N per-day points for the selected period ('all' keeps everything). */
-export function sliceByPeriod(points: ChartPoint[], period: ChartPeriod): ChartPoint[] {
+export function sliceByPeriod<T>(points: T[], period: ChartPeriod): T[] {
   if (period === 'all') return points;
   return points.slice(-PERIOD_DAYS[period]);
 }
