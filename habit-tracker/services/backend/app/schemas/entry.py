@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: builtin generics (list[X], X | None) instead of typing.List/Optional (mypy --strict)
+# [review:need-review] PHASE-01/16-checklist-upsert-today-page
+# summary: added ChecklistUpsertRequest ({category_id, entry_date, values: {field_id: bool}})
 from pydantic import BaseModel
 from datetime import datetime, date
 
@@ -47,6 +47,18 @@ class EntryUpdate(BaseModel):
     entry_date: date | None = None
     notes: str | None = None
     values: list[EntryValueCreate] | None = None
+
+
+class ChecklistUpsertRequest(BaseModel):
+    """
+    Схема идемпотентного upsert для checklist-категории.
+
+    values — словарь {field_id: bool}: какие чек-поля выставить/снять.
+    """
+
+    category_id: int
+    entry_date: date
+    values: dict[int, bool]
 
 
 class EntryResponse(EntryBase):

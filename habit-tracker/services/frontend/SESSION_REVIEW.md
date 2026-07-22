@@ -1,5 +1,15 @@
 # Session Review Log
 
+## 2026-07-22 — PHASE-01/16-checklist-upsert-today-page
+
+Тикет: страница `/today` — checklist-категории как сетка чипсов (тап = toggle с оптимистичным обновлением через `PUT /entries/checklist`), form-категории — быстрый ввод числа первого числового поля (`POST /entries`). Затронуто 3 файла (1 new, 2 mod).
+
+- `app/today/page.tsx` — **new**: секции по checklist-категориям с чипсами полей (состояние из entries за сегодня, оптимистичный toggle с откатом при ошибке); блок Quick input — строка на form-категорию с первым number-полем, input + кнопка сохранить.
+- `lib/api.ts` — **mod**: `entriesAPI.upsertChecklist` (PUT `/entries/checklist`) и тип `ChecklistUpsert` (`values: Record<number, boolean>`).
+- `components/Navigation.tsx` — **mod**: пункт Today (иконка Sun) между Dashboard и Categories.
+
+Feedback loops: tsc --noEmit clean, eslint clean, next build green (route `/today` собирается).
+
 ## 2026-07-22 — PHASE-01/15-category-display-mode-group
 
 Тикет: редактор категории — select «Display mode» (Form / Checklist) и текстовое поле «Group»; значения видны бейджами в карточке категории. Затронуто 2 файла (0 new, 2 mod).

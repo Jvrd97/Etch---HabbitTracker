@@ -1,8 +1,8 @@
 /**
  * API Client for Habit Tracker Backend
  */
-// [review:need-review] PHASE-01/15-category-display-mode-group
-// summary: Category types extended with display_mode (form|checklist) and group
+// [review:need-review] PHASE-01/16-checklist-upsert-today-page
+// summary: added entriesAPI.upsertChecklist (PUT /entries/checklist) + ChecklistUpsert type
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -118,6 +118,13 @@ export const entriesAPI = {
   delete: async (id: number) => {
     return fetcher<void>(`/entries/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  upsertChecklist: async (data: ChecklistUpsert) => {
+    return fetcher<Entry>('/entries/checklist', {
+      method: 'PUT',
+      body: JSON.stringify(data),
     });
   },
 
@@ -254,6 +261,12 @@ export interface EntryValue {
 export interface EntryValueCreate {
   field_id: number;
   value: string;
+}
+
+export interface ChecklistUpsert {
+  category_id: number;
+  entry_date: string;
+  values: Record<number, boolean>;
 }
 
 export interface JournalEntry {

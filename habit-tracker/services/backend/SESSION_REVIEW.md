@@ -1,5 +1,17 @@
 # Session Review Log
 
+## 2026-07-22 — PHASE-01/16-checklist-upsert-today-page
+
+Тикет: идемпотентный upsert для checklist-категорий — `PUT /api/v1/entries/checklist` (body `{category_id, entry_date, values: {field_id: bool}}`), одна запись на (категория, день). Затронуто 5 файлов (1 new, 4 mod).
+
+- `tests/test_checklist.py` — **new**: 5 тестов — первый PUT создаёт, второй обновляет ту же запись (count=1, тот же id), снятие галочки (`"false"`, без дублей), 422 на form-категорию, 404 на несуществующую.
+- `app/crud/entry.py` — **mod**: `upsert_checklist_entry` — ищет Entry по (category_id, entry_date), создаёт при отсутствии; boolean-значения (`"true"`/`"false"`) мержатся в существующие EntryValue без дублей.
+- `app/schemas/entry.py` — **mod**: `ChecklistUpsertRequest` (`category_id`, `entry_date`, `values: dict[int, bool]`).
+- `app/schemas/__init__.py` — **mod**: экспорт `ChecklistUpsertRequest`.
+- `app/api/entries.py` — **mod**: endpoint `PUT /entries/checklist` (объявлен раньше `/{entry_id}`-роутов): 404 — категории нет, 422 — категория не checklist, иначе upsert; `app/main.py` не менялся — endpoint живёт в уже подключённом entries-роутере.
+
+Feedback loops: pytest 71/71 green, ruff check + format clean, mypy --strict clean (27 файлов).
+
 ## 2026-07-22 — PHASE-01/15-category-display-mode-group
 
 Тикет: категории получают `display_mode` (`form` | `checklist`, default `form`) и `group` (varchar NULL) — схема, модель, Pydantic, API, тесты. Затронуто 5 файлов (1 new, 4 mod).

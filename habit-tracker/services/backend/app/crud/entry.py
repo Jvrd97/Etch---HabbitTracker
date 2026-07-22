@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: builtin generics (list[X], X | None) instead of typing.List/Optional (mypy --strict)
+# [review:need-review] PHASE-01/16-checklist-upsert-today-page
+# summary: added upsert_checklist_entry - one entry per (category, date), boolean values merged in place
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -138,6 +138,47 @@ async def delete_entry(db: AsyncSession, entry_id: int) -> bool:
     await db.delete(db_entry)
     await db.commit()
     return True
+
+
+async def upsert_checklist_entry(
+    db: AsyncSession, category_id: int, entry_date: date, values: dict[int, bool]
+) -> Entry:
+    """
+    Идемпотентный upsert записи checklist-категории.
+
+    Гарантирует одну запись на (category_id, entry_date): существующая
+    запись переиспользуется, boolean-значения обновляются на месте
+    (без дублей EntryValue при повторных вызовах).
+    """
+    result = await db.execute(
+        select(Entry)
+        .options(selectinload(Entry.values))
+        .where(and_(Entry.category_id == category_id, Entry.entry_date == entry_date))
+    )
+    db_entry = result.scalars().first()
+
+    if db_entry is None:
+        db_entry = Entry(category_id=category_id, entry_date=entry_date)
+        db.add(db_entry)
+        await db.flush()
+        existing_values: dict[int, EntryValue] = {}
+    else:
+        existing_values = {v.field_id: v for v in db_entry.values}
+
+    for field_id, checked in values.items():
+        str_value = "true" if checked else "false"
+        existing = existing_values.get(field_id)
+        if existing is not None:
+            existing.value = str_value
+        else:
+            db.add(EntryValue(entry_id=db_entry.id, field_id=field_id, value=str_value))
+
+    await db.commit()
+
+    result = await db.execute(
+        select(Entry).options(selectinload(Entry.values)).where(Entry.id == db_entry.id)
+    )
+    return result.scalar_one()
 
 
 async def get_entries_by_date_range(

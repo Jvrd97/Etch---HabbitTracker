@@ -1,13 +1,14 @@
 'use client';
-// [review:need-review] PHASE-01/adhoc-lime-redesign
-// summary: Dark top navigation with lime active pill and logo-style app name
+// [review:need-review] PHASE-01/16-checklist-upsert-today-page
+// summary: added Today nav item (lime redesign nav otherwise unchanged)
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderKanban, CalendarDays, BookOpen } from 'lucide-react';
+import { Home, FolderKanban, CalendarDays, BookOpen, Sun } from 'lucide-react';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Today', href: '/today', icon: Sun },
   { name: 'Categories', href: '/categories', icon: FolderKanban },
   { name: 'Entries', href: '/entries', icon: CalendarDays },
   { name: 'Journal', href: '/journal', icon: BookOpen },

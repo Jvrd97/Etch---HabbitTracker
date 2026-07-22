@@ -1,3 +1,5 @@
+# [review:need-review] PHASE-01/16-checklist-upsert-today-page
+# summary: re-export ChecklistUpsertRequest
 from app.schemas.category import (
     CategoryCreate,
     CategoryUpdate,
@@ -7,6 +9,7 @@ from app.schemas.category import (
     FieldResponse,
 )
 from app.schemas.entry import (
+    ChecklistUpsertRequest,
     EntryCreate,
     EntryUpdate,
     EntryResponse,
@@ -33,6 +36,7 @@ __all__ = [
     "FieldCreate",
     "FieldUpdate",
     "FieldResponse",
+    "ChecklistUpsertRequest",
     "EntryCreate",
     "EntryUpdate",
     "EntryResponse",

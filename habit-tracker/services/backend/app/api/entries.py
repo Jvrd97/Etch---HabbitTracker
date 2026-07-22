@@ -1,14 +1,17 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: typed endpoint signatures (return annotations, builtin generics) for mypy --strict
+# [review:need-review] PHASE-01/16-checklist-upsert-today-page
+# summary: added PUT /entries/checklist - idempotent upsert, 404 unknown / 422 non-checklist category
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.crud import category as category_crud
 from app.crud import entry as entry_crud
 from app.models import Entry
-from app.schemas import EntryCreate, EntryUpdate, EntryResponse
+from app.schemas import ChecklistUpsertRequest, EntryCreate, EntryUpdate, EntryResponse
+
+CHECKLIST_DISPLAY_MODE = "checklist"
 
 router = APIRouter(prefix="/entries", tags=["entries"])
 
@@ -44,6 +47,39 @@ async def get_entries(
         end_date=end_date,
     )
     return entries
+
+
+@router.put("/checklist", response_model=EntryResponse)
+async def upsert_checklist_entry(
+    payload: ChecklistUpsertRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Entry:
+    """
+    Идемпотентный upsert записи checklist-категории.
+
+    Повторный PUT для той же (category_id, entry_date) обновляет
+    существующую запись — дубликатов не создаётся.
+
+    - **404** — категория не найдена
+    - **422** — категория существует, но её display_mode не "checklist"
+    """
+    category = await category_crud.get_category(db, payload.category_id)
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Category with id {payload.category_id} not found",
+        )
+    if category.display_mode != CHECKLIST_DISPLAY_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Category {payload.category_id} is not a checklist category "
+                f"(display_mode={category.display_mode})"
+            ),
+        )
+    return await entry_crud.upsert_checklist_entry(
+        db, payload.category_id, payload.entry_date, payload.values
+    )
 
 
 @router.get("/{entry_id}", response_model=EntryResponse)
