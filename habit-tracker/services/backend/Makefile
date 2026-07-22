@@ -1,0 +1,52 @@
+# [review:need-review] PHASE-01/adhoc-makefile
+# summary: containerless backend run — gunicorn with uvicorn workers, db in docker
+
+# Postgres runs in docker published on host 5433 (5432 is taken by another dev instance)
+DB_ENV = POSTGRES_HOST=localhost POSTGRES_PORT=5433
+WORKERS ?= 4
+PORT ?= 8000
+PID_FILE = .gunicorn.pid
+
+.PHONY: db migrate run dev test lint type check stop
+
+## start postgres container (the only docker piece)
+db:
+	docker compose -f ../../docker-compose.yml up -d postgres
+
+## apply alembic migrations
+migrate: db
+	$(DB_ENV) uv run alembic upgrade head
+
+## production-style run: gunicorn master + uvicorn workers; master auto-respawns
+## dead workers, --max-requests recycles them periodically
+run: migrate
+	$(DB_ENV) uv run gunicorn app.main:app \
+		--workers $(WORKERS) \
+		--worker-class uvicorn.workers.UvicornWorker \
+		--bind 0.0.0.0:$(PORT) \
+		--pid $(PID_FILE) \
+		--max-requests 1000 --max-requests-jitter 50 \
+		--graceful-timeout 30 --timeout 60 \
+		--access-logfile - --error-logfile -
+
+## dev run: single uvicorn with hot reload
+dev: migrate
+	$(DB_ENV) uv run uvicorn app.main:app --reload --port $(PORT)
+
+test: db
+	$(DB_ENV) uv run pytest tests/ -q
+
+lint:
+	uv run ruff check app tests && uv run ruff format --check app tests
+
+type:
+	uv run mypy --strict app
+
+check: lint type test
+
+## stop everything: gunicorn (pidfile, fallback pkill), dev uvicorn, all docker containers
+stop:
+	@if [ -f $(PID_FILE) ]; then kill "$$(cat $(PID_FILE))" 2>/dev/null && echo "gunicorn stopped (pidfile)" || true; rm -f $(PID_FILE); \
+	else pkill -f "gunicorn app.main:app" 2>/dev/null && echo "gunicorn stopped (pkill)" || echo "gunicorn not running"; fi
+	@pkill -f "$(CURDIR)/.venv/bin/uvicorn app.main:app" 2>/dev/null && echo "dev uvicorn stopped" || echo "dev uvicorn not running"
+	docker compose -f ../../docker-compose.yml stop

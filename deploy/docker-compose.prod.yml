@@ -1,0 +1,19 @@
+# [review:need-review] PHASE-01/02-deploy-vps-tailscale
+# summary: production override — restart policies, no host port for postgres, API key required
+# Usage (on VPS, from habit-tracker/):
+#   docker compose -f docker-compose.yml -f ../deploy/docker-compose.prod.yml up -d --build
+services:
+  postgres:
+    restart: always
+    ports: []  # DB is reachable only from the compose network
+
+  backend:
+    restart: always
+    command: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --max-requests 1000 --max-requests-jitter 50 --graceful-timeout 30 --timeout 60 --access-logfile - --error-logfile -
+    environment:
+      API_KEY: ${API_KEY:?API_KEY must be set in production}
+    volumes: []  # run from the image, no live-reload bind mount
+
+  frontend:
+    restart: always
+    profiles: ["web"]  # optional: enable with --profile web

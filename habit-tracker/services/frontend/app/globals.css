@@ -1,0 +1,113 @@
+/* [review:need-review] PHASE-01/adhoc-lime-redesign */
+/* summary: Lime Tech design tokens, dark base styles, scrollbar, selection, loader and ring animations */
+
+@import "tailwindcss";
+
+@theme {
+  --color-background: #090909;
+  --color-surface: #141414;
+  --color-card: #1a1a1a;
+  --color-lime: #b8ff36;
+  --color-green-secondary: #69e76a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a3a3a3;
+  --color-text-disabled: #666666;
+  --color-success: #4ade80;
+  --color-warning: #facc15;
+  --color-danger: #ef4444;
+  --color-info: #60a5fa;
+}
+
+:root {
+  --background: #090909;
+  --surface: #141414;
+  --card: #1a1a1a;
+  --lime: #b8ff36;
+  --green-secondary: #69e76a;
+  --text-primary: #ffffff;
+  --text-secondary: #a3a3a3;
+  --text-disabled: #666666;
+  --success: #4ade80;
+  --warning: #facc15;
+  --danger: #ef4444;
+  --info: #60a5fa;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+::selection {
+  background: var(--lime);
+  color: var(--background);
+}
+
+/* Thin dark scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* Neon ring loader rotation */
+@keyframes neon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-neon-spin {
+  animation: neon-spin 0.9s linear infinite;
+}
+
+/* Progress ring draw-in: stroke-dashoffset target is set inline, start from full circumference */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-circumference, 283);
+  }
+}
+
+.animate-ring-draw {
+  animation: ring-draw 600ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+/* Soft fade+rise used by cards and lists on mount */
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-rise {
+  animation: fade-rise 250ms ease-out both;
+}
+
+/* Dark native controls (date/time pickers, color input) */
+input,
+select,
+textarea {
+  color-scheme: dark;
+}

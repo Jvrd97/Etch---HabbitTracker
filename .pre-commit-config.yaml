@@ -1,0 +1,44 @@
+# [review:need-review] PHASE-01/adhoc-ci-precommit
+# summary: pre-commit hooks — hygiene, ruff lint+format, mypy --strict on backend
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^habit-tracker/services/backend/
+      - id: ruff-format
+        files: ^habit-tracker/services/backend/
+
+  - repo: local
+    hooks:
+      - id: mypy-backend
+        name: mypy --strict (backend app)
+        entry: bash -c 'cd habit-tracker/services/backend && uv run mypy --strict app'
+        language: system
+        files: ^habit-tracker/services/backend/app/.*\.py$
+        pass_filenames: false
+
+      - id: frontend-typecheck
+        name: tsc --noEmit (frontend)
+        entry: bash -c 'cd habit-tracker/services/frontend && bunx tsc --noEmit'
+        language: system
+        files: ^habit-tracker/services/frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+
+      - id: forbid-env-files
+        name: forbid committing .env files
+        entry: bash -c 'echo ".env files must not be committed" && exit 1'
+        language: system
+        files: \.env(\..*)?$
+        exclude: \.env\.example$

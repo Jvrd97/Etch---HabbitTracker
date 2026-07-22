@@ -1,0 +1,55 @@
+# [review:need-review] PHASE-01/adhoc-ci-precommit
+# summary: CI — backend (ruff, mypy --strict, pytest vs postgres) and frontend (build)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: habit-tracker/services/backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: habit_user
+          POSTGRES_PASSWORD: habit_pass
+          POSTGRES_DB: habit_tracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U habit_user"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Sync dependencies
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check app tests && uv run ruff format --check app tests
+      - name: Types
+        run: uv run mypy --strict app
+      - name: Tests
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://habit_user:habit_pass@localhost:5432/habit_tracker_test
+        run: uv run pytest tests/ -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: habit-tracker/services/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Typecheck and build
+        run: bun run build

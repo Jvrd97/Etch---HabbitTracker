@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./credentials/**)",
+      "Read(./*.pem)",
+      "Read(./*.key)",
+      "Read(./id_rsa*)",
+      "Read(./.ssh/**)",
+      "Read(./node_modules/**)",
+      "Read(./.venv/**)",
+      "Read(./build/**)",
+      "Read(./dist/**)",
+      "Bash(rm -rf *)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~/*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard origin/main)",
+      "Bash(git reset --hard origin/master)",
+      "Bash(sudo *)",
+      "Bash(curl * | sh)",
+      "Bash(curl * | bash)",
+      "Bash(wget * | sh)",
+      "Bash(wget * | bash)",
+      "Bash(npm publish*)",
+      "WebFetch(domain:pastebin.com)",
+      "WebFetch(domain:hastebin.com)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git rebase*)",
+      "Bash(git merge*)",
+      "Bash(docker push*)",
+      "Bash(kubectl apply*)",
+      "Bash(terraform apply*)",
+      "Bash(alembic upgrade head)",
+      "Bash(alembic downgrade*)",
+      "Bash(npm run db:migrate*)",
+      "Bash(yarn db:migrate*)",
+      "Bash(pnpm db:migrate*)",
+      "Bash(redis-cli flushdb)",
+      "Bash(redis-cli flushall)",
+      "Write(.github/workflows/**)",
+      "Write(infra/**)",
+      "Write(terraform/**)",
+      "Write(k8s/**)",
+      "Write(helm/**)"
+    ],
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git checkout*)",
+      "Bash(git branch*)",
+      "Bash(git stash*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git worktree*)",
+      "Bash(git mv*)",
+      "Bash(npm run *)",
+      "Bash(npm test*)",
+      "Bash(npm run test*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run build*)",
+      "Bash(npm run typecheck*)",
+      "Bash(yarn *)",
+      "Bash(pnpm *)",
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(black *)",
+      "Bash(uv run *)",
+      "Bash(uv sync)",
+      "Bash(uv pip install*)",
+      "Bash(poetry run *)",
+      "Bash(poetry install)",
+      "Bash(alembic check)",
+      "Bash(alembic current)",
+      "Bash(alembic history*)",
+      "Bash(alembic revision*)",
+      "Bash(docker compose*)",
+      "Bash(docker logs*)",
+      "Bash(docker ps*)",
+      "Bash(make *)",
+      "Bash(just *)",
+      "Bash(ls*)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(fd *)",
+      "Bash(jq *)",
+      "Bash(tree *)",
+      "Bash(find . -type *)",
+      "Bash(redis-cli get*)",
+      "Bash(redis-cli keys*)",
+      "Bash(psql -h localhost*)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:typescriptlang.org)",
+      "WebFetch(domain:docs.claude.com)",
+      "WebFetch(domain:docs.langchain.com)",
+      "WebFetch(domain:qdrant.tech)",
+      "WebFetch(domain:postgresql.org)",
+      "WebFetch(domain:redis.io)",
+      "WebFetch(domain:github.com)"
+    ],
+    "additionalDirectories": []
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/capture-label.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/guard-dangerous-bash.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/format-on-save.sh \"$CLAUDE_TOOL_INPUT_FILE_PATH\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-feedback-loops.sh",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-context.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/backup-before-compact.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "120000",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "FORCE_COLOR": "1"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash .claude/hooks/statusline.sh"
+  }
+}
