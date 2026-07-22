@@ -1,5 +1,17 @@
 # Session Review Log
 
+## 2026-07-22 — PHASE-01/25-ai-reports-history
+
+Тикет: история AI-отчётов (`/insights`) и выбор периода разбора на Dashboard. Frontend-часть: затронуто 5 файлов (2 new, 3 mod); backend-часть описана в `services/backend/SESSION_REVIEW.md`.
+
+- `lib/api.ts` — **mod**: `insightsAPI.getAll` (GET /insights/) и `insightsAPI.getById` (GET /insights/{id}) + тип `AIReportListItem` (id, period_days, model, created_at, preview).
+- `components/InsightMarkdown.tsx` — **new**: минимальный MD-рендерер отчёта (headings/bullets/paragraphs), вынесен из `app/page.tsx` для переиспользования.
+- `app/insights/page.tsx` — **new**: карточки истории отчётов (период, дата, модель, превью) с разворачиваемым полным просмотром; состояние просмотра — discriminated union `ReportView`; empty state со ссылкой на Dashboard.
+- `app/page.tsx` — **mod**: сегмент-селектор периода 7/30/90 (`INSIGHT_PERIOD_OPTIONS`) рядом с кнопкой «Разбор периода», период уходит в `insightsAPI.create(insightPeriod)`; ссылка «История» → `/insights`; локальный InsightMarkdown заменён импортом.
+- `components/Navigation.tsx` — **mod**: пункт Insights (`/insights`, иконка Sparkles).
+
+Feedback loops: tsc --noEmit clean, eslint clean, bun test 27/27 green, next build green (роут `/insights` static).
+
 ## 2026-07-22 — PHASE-01/20-category-page-chart
 
 Тикет: страница категории `/categories/[id]` с мультилинейным per-day графиком (Recharts): линии по number/time-полям, две Y-оси при разных единицах, легенда с toggle видимости, периоды 7/30/90/всё без перезагрузки (данные за год из GET /table/ режутся на клиенте). Затронуто 6 файлов (3 new, 3 mod).
@@ -99,3 +111,14 @@ Feedback loops: bun test 15/15 green, tsc --noEmit clean, eslint clean.
 - `app/categories/[id]/page.tsx` — **mod**: параллельная загрузка category + table + entries (limit 1000, пагинация out of scope); под графиком история entries по датам через `EntryCard`; `onMutated` инкрементирует refresh-счётчик — перезагружаются и entries, и данные графика.
 
 Feedback loops: bun test 17/17 green, tsc --noEmit clean, eslint clean, next build green. Ручной smoke «поправил запись → линия перестроилась» — за пользователем (dev-стенд).
+
+## 2026-07-22 — PHASE-01/23-checklist-bar-streaks
+
+Тикет: страница checklist-категории — bar-график «X из N за день» вместо линий + текущий стрик по каждому boolean-полю. Затронуто 4 файла (0 new, 4 mod).
+
+- `lib/chart-utils.ts` — **mod**: чистые функции `booleanFields` (boolean-поля в field order), `buildChecklistBarData` (число true-ячеек категории за день; missing/false = not done) и `currentStreak` (от today назад; день без true — разрыв; непроставленный today — pending и стрик не рвёт до конца дня).
+- `lib/chart-utils.test.ts` — **mod**: unit-тесты bar-данных (пустая история, счёт по дням, чужие категории/поля/false) и стрика (0/1/N, разрыв, pending today, чужие поля).
+- `lib/chart-data.ts` — **mod**: `sliceByPeriod` сделан generic `<T>` — переиспользуется для `ChecklistBarPoint[]` без изменения поведения.
+- `components/CategoryChart.tsx` — **mod**: диспетчер по `display_mode` — для checklist рендерится `ChecklistCategoryChart` (BarChart done-per-day, Y domain 0..N, tooltip «X of N», лаймовые бейджи стриков по полям, лайн-переключатели периода); форма — прежний line chart; кнопки периода вынесены в общий `PeriodButtons`.
+
+Feedback loops: bun test 27/27 green, tsc --noEmit clean, eslint clean, next build green.

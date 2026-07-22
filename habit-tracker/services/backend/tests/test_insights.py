@@ -2,8 +2,8 @@
 Tests for the AI insights endpoint (POST /api/v1/insights/).
 """
 
-# [review:need-review] PHASE-01/26-llm-cli-backend
-# summary: 503 test now forces api backend explicitly (auto-detect would pick a local claude CLI)
+# [review:need-review] PHASE-01/25-ai-reports-history
+# summary: + tests for reports history (GET list newest-first with preview, GET by id, 404)
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -98,6 +98,79 @@ class TestInsightsEndpoint:
 
         assert response.status_code == 502
         assert await _report_count(db_session) == 0
+
+
+async def _seed_report(
+    db: AsyncSession,
+    *,
+    period_days: int = 30,
+    content: str = "## Report\n\ndetails",
+    model: str = "test-model",
+) -> AIReport:
+    report = AIReport(period_days=period_days, content=content, model=model)
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    return report
+
+
+@pytest.mark.asyncio
+class TestInsightsHistory:
+    """GET /api/v1/insights/ (list) and GET /api/v1/insights/{id}."""
+
+    async def test_list_returns_reports_newest_first_with_preview(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """List has id/period_days/model/created_at/preview, newest report first."""
+        first = await _seed_report(db_session, period_days=7, content="old " * 100)
+        second = await _seed_report(
+            db_session, period_days=90, content="## New\n\nfresh"
+        )
+
+        response = await client.get("/api/v1/insights/")
+        assert response.status_code == 200
+        items = response.json()
+        assert [item["id"] for item in items] == [second.id, first.id]
+
+        newest = items[0]
+        assert newest["period_days"] == 90
+        assert newest["model"] == "test-model"
+        assert newest["created_at"]
+        assert newest["preview"].startswith("## New")
+        assert "content" not in newest
+
+    async def test_list_preview_is_truncated(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Long content is cut down to a bounded preview."""
+        long_content = "x" * 2000
+        await _seed_report(db_session, content=long_content)
+
+        response = await client.get("/api/v1/insights/")
+        assert response.status_code == 200
+        preview = response.json()[0]["preview"]
+        assert len(preview) < len(long_content)
+
+    async def test_get_by_id_returns_full_report(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """GET /{id} returns the persisted report with full content."""
+        report = await _seed_report(
+            db_session, period_days=14, content="## Full\n\nbody"
+        )
+
+        response = await client.get(f"/api/v1/insights/{report.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == report.id
+        assert data["period_days"] == 14
+        assert data["content"] == "## Full\n\nbody"
+        assert data["model"] == "test-model"
+
+    async def test_get_unknown_id_returns_404(self, client: AsyncClient) -> None:
+        """Nonexistent report id -> 404."""
+        response = await client.get("/api/v1/insights/999999")
+        assert response.status_code == 404
 
 
 @pytest.mark.asyncio

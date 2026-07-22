@@ -1,9 +1,10 @@
 'use client';
-// [review:need-review] PHASE-01/24-ai-insights-endpoint-button
-// summary: added AI insights panel — «Разбор периода» button, neon loader, MD report, error with Retry
+// [review:need-review] PHASE-01/25-ai-reports-history
+// summary: + period selector (7/30/90) for AI разбор, history link; InsightMarkdown extracted to component
 
 import { useEffect, useState } from 'react';
 import { categoriesAPI, entriesAPI, insightsAPI, journalAPI, AIReport, Entry } from '@/lib/api';
+import InsightMarkdown from '@/components/InsightMarkdown';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import {
@@ -61,40 +62,8 @@ function ProgressRing({ progress }: { progress: number }) {
   );
 }
 
-function InsightMarkdown({ content }: { content: string }) {
-  // Minimal MD rendering (headings + bullet lists + paragraphs), no extra deps
-  const lines = content.split('\n');
-  return (
-    <div className="space-y-2 text-text-secondary text-base leading-relaxed">
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-        if (trimmed === '') return null;
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h4 key={i} className="text-base font-semibold text-text-primary pt-2">
-              {trimmed.slice(4)}
-            </h4>
-          );
-        }
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h3 key={i} className="text-lg font-semibold text-lime pt-3">
-              {trimmed.slice(3)}
-            </h3>
-          );
-        }
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <p key={i} className="pl-4 relative before:content-['•'] before:absolute before:left-0 before:text-lime">
-              {trimmed.slice(2)}
-            </p>
-          );
-        }
-        return <p key={i}>{trimmed}</p>;
-      })}
-    </div>
-  );
-}
+const INSIGHT_PERIOD_OPTIONS = [7, 30, 90] as const;
+type InsightPeriod = (typeof INSIGHT_PERIOD_OPTIONS)[number];
 
 type InsightState =
   | { status: 'idle' }
@@ -106,6 +75,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [insight, setInsight] = useState<InsightState>({ status: 'idle' });
+  const [insightPeriod, setInsightPeriod] = useState<InsightPeriod>(30);
   const [stats, setStats] = useState({
     categoriesCount: 0,
     entriesCount: 0,
@@ -144,7 +114,7 @@ export default function Dashboard() {
   const generateInsight = async () => {
     setInsight({ status: 'loading' });
     try {
-      const report = await insightsAPI.create();
+      const report = await insightsAPI.create(insightPeriod);
       setInsight({ status: 'ready', report });
     } catch (err) {
       setInsight({
@@ -238,19 +208,50 @@ export default function Dashboard() {
             <div>
               <h2 className="text-[22px] font-semibold text-text-primary">AI-разбор</h2>
               <p className="text-[13px] text-text-secondary">
-                Тренды, пропуски и корреляции за последние 30 дней
+                Тренды, пропуски и корреляции за последние {insightPeriod} дней
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={generateInsight}
-            disabled={insight.status === 'loading'}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-          >
-            <Sparkles className="w-4 h-4" strokeWidth={2} />
-            Разбор периода
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div
+              role="group"
+              aria-label="Период разбора"
+              className="inline-flex items-center rounded-full bg-surface border border-white/5 p-1"
+            >
+              {INSIGHT_PERIOD_OPTIONS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setInsightPeriod(days)}
+                  disabled={insight.status === 'loading'}
+                  aria-pressed={insightPeriod === days}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 disabled:opacity-50 ${
+                    insightPeriod === days
+                      ? 'bg-lime text-background shadow-[0_0_14px_rgba(184,255,54,0.25)]'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  {days} дн.
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={generateInsight}
+              disabled={insight.status === 'loading'}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            >
+              <Sparkles className="w-4 h-4" strokeWidth={2} />
+              Разбор периода
+            </button>
+            <Link
+              href="/insights"
+              className="text-sm font-medium text-text-secondary hover:text-lime transition-colors duration-200 inline-flex items-center gap-1"
+            >
+              История
+              <ArrowRight className="w-4 h-4" strokeWidth={2} />
+            </Link>
+          </div>
         </div>
         <div className="px-6 py-5">
           {insight.status === 'idle' && (

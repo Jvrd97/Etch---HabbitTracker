@@ -1,10 +1,10 @@
 'use client';
-// [review:need-review] PHASE-01/17-table-groups-sport-columns
-// summary: added Table nav item (grouped table view)
+// [review:need-review] PHASE-01/25-ai-reports-history
+// summary: added Insights nav item (AI reports history)
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderKanban, CalendarDays, BookOpen, Sun, Table2 } from 'lucide-react';
+import { Home, FolderKanban, CalendarDays, BookOpen, Sun, Table2, Sparkles } from 'lucide-react';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -13,6 +13,7 @@ const navItems = [
   { name: 'Categories', href: '/categories', icon: FolderKanban },
   { name: 'Entries', href: '/entries', icon: CalendarDays },
   { name: 'Journal', href: '/journal', icon: BookOpen },
+  { name: 'Insights', href: '/insights', icon: Sparkles },
 ];
 
 export default function Navigation() {

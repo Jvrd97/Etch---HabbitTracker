@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/26-llm-cli-backend
-# summary: POST /api/v1/insights — backend selection moved to resolve_insights_client (cli/api)
+# [review:need-review] PHASE-01/25-ai-reports-history
+# summary: + GET /insights (history list with previews) and GET /insights/{id} (full report, 404)
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +8,8 @@ from app.crud import insight as insight_crud
 from app.llm.client import InsightsClient, LLMError, resolve_insights_client
 from app.llm.context import build_period_context
 from app.models import AIReport
-from app.schemas import InsightRequest, InsightResponse
+from app.schemas import InsightListItem, InsightRequest, InsightResponse
+from app.schemas.insight import PREVIEW_MAX_CHARS
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -20,6 +21,34 @@ def get_llm_client() -> InsightsClient | None:
     Tests override this dependency to mock at the app/llm boundary.
     """
     return resolve_insights_client()
+
+
+@router.get("/", response_model=list[InsightListItem])
+async def list_insights(db: AsyncSession = Depends(get_db)) -> list[InsightListItem]:
+    """История AI-отчётов, новые сверху; content обрезан до превью."""
+    reports = await insight_crud.list_ai_reports(db)
+    return [
+        InsightListItem(
+            id=report.id,
+            period_days=report.period_days,
+            model=report.model,
+            created_at=report.created_at,
+            preview=report.content[:PREVIEW_MAX_CHARS],
+        )
+        for report in reports
+    ]
+
+
+@router.get("/{report_id}", response_model=InsightResponse)
+async def get_insight(report_id: int, db: AsyncSession = Depends(get_db)) -> AIReport:
+    """Полный AI-отчёт по id; 404, если отчёта нет."""
+    report = await insight_crud.get_ai_report(db, report_id)
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"AI report {report_id} not found",
+        )
+    return report
 
 
 @router.post("/", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)

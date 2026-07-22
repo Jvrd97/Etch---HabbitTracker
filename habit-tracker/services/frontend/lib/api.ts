@@ -1,8 +1,8 @@
 /**
  * API Client for Habit Tracker Backend
  */
-// [review:need-review] PHASE-01/24-ai-insights-endpoint-button
-// summary: added insightsAPI.create (POST /insights) + AIReport type
+// [review:need-review] PHASE-01/25-ai-reports-history
+// summary: + insightsAPI.getAll/getById (reports history) + AIReportListItem type
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -151,6 +151,14 @@ export const insightsAPI = {
       method: 'POST',
       body: JSON.stringify(periodDays !== undefined ? { period_days: periodDays } : {}),
     });
+  },
+
+  getAll: async () => {
+    return fetcher<AIReportListItem[]>('/insights/');
+  },
+
+  getById: async (id: number) => {
+    return fetcher<AIReport>(`/insights/${id}`);
   },
 };
 
@@ -318,6 +326,14 @@ export interface AIReport {
   content: string;
   model: string;
   created_at: string;
+}
+
+export interface AIReportListItem {
+  id: number;
+  period_days: number;
+  model: string;
+  created_at: string;
+  preview: string;
 }
 
 export interface TableCategoryMeta {

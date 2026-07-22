@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/24-ai-insights-endpoint-button
-# summary: re-export insight schemas (InsightRequest, InsightResponse)
+# [review:need-review] PHASE-01/25-ai-reports-history
+# summary: re-export insight schemas (+ InsightListItem)
 from app.schemas.category import (
     CategoryCreate,
     CategoryUpdate,
@@ -24,6 +24,7 @@ from app.schemas.journal import (
     JournalEntryListResponse,
 )
 from app.schemas.insight import (
+    InsightListItem,
     InsightRequest,
     InsightResponse,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "JournalEntryUpdate",
     "JournalEntryResponse",
     "JournalEntryListResponse",
+    "InsightListItem",
     "InsightRequest",
     "InsightResponse",
     "TableCategoryMeta",

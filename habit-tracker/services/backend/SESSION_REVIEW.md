@@ -1,5 +1,27 @@
 # Session Review Log
 
+## 2026-07-22 — PHASE-01/25-ai-reports-history
+
+Тикет: история AI-отчётов и выбор периода — `GET /api/v1/insights/` (список, новые сверху, превью), `GET /api/v1/insights/{id}` (полный отчёт, 404), страница `/insights`, селектор периода 7/30/90 на Dashboard. Затронуто 10 файлов (2 new, 8 mod; 5 backend + 5 frontend).
+
+Backend:
+
+- `tests/test_insights.py` — **mod**: +4 теста (TDD, сначала красные) — список новые сверху с полями id/period_days/model/created_at/preview и без content, превью обрезано, GET по id возвращает полный отчёт, 404 на несуществующий id.
+- `app/crud/insight.py` — **mod**: `list_ai_reports` (order by created_at desc, id desc) и `get_ai_report` (по id, None при отсутствии).
+- `app/schemas/insight.py` — **mod**: `InsightListItem` (id, period_days, model, created_at, preview) + константа `PREVIEW_MAX_CHARS = 200`.
+- `app/schemas/__init__.py` — **mod**: ре-экспорт `InsightListItem`.
+- `app/api/insights.py` — **mod**: `GET /insights/` (список с превью) и `GET /insights/{report_id}` (полный отчёт, 404) — объявлены до POST, path-роут после статического `/`.
+
+Frontend (`services/frontend`):
+
+- `lib/api.ts` — **mod**: `insightsAPI.getAll` / `insightsAPI.getById` + тип `AIReportListItem`.
+- `components/InsightMarkdown.tsx` — **new**: минимальный MD-рендерер отчёта, вынесен из Dashboard для переиспользования.
+- `app/insights/page.tsx` — **new**: страница истории — карточки отчётов (период, дата, модель, превью), разворачиваемый полный просмотр (discriminated union `ReportView`), empty state со ссылкой на Dashboard.
+- `app/page.tsx` — **mod**: селектор периода 7/30/90 (`INSIGHT_PERIOD_OPTIONS`, aria-pressed) у кнопки «Разбор периода», период прокидывается в `insightsAPI.create`, ссылка «История» на `/insights`; локальный `InsightMarkdown` заменён импортом компонента.
+- `components/Navigation.tsx` — **mod**: пункт Insights (`/insights`, иконка Sparkles).
+
+Feedback loops: pytest 99/99 green, ruff check + format clean, mypy --strict clean (36 файлов); frontend — tsc --noEmit clean, eslint clean, `bun test` 27/27, `next build` ok (роут `/insights` собран).
+
 ## 2026-07-22 — PHASE-01/16-checklist-upsert-today-page
 
 Тикет: идемпотентный upsert для checklist-категорий — `PUT /api/v1/entries/checklist` (body `{category_id, entry_date, values: {field_id: bool}}`), одна запись на (категория, день). Затронуто 5 файлов (1 new, 4 mod).
