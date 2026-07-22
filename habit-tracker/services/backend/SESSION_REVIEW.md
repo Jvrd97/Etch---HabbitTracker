@@ -114,3 +114,31 @@ Feedback loops: pytest 74/74 green (локально, TEST_DATABASE_URL → loca
 - `tests/test_checklist.py` — **mod**: 2 новых теста (`test_backfill_past_date_visible_in_table`, `test_backfill_uncheck_past_date_visible_in_table`) — PUT checklist на прошлую дату (today-2) даёт cell `aggregated_value: true` в GET /table, повторный PUT со значением false переворачивает ячейку без дубликатов. Новые тесты полностью типизированы (`-> None`, `checklist_category: dict[str, Any]`).
 
 Feedback loops: pytest 77/77 green (локально, TEST_DATABASE_URL → localhost:5433), ruff clean; `mypy tests/test_checklist.py` — 15 ошибок, все легаси (фикстуры и старые тесты, baseline без изменений), от диффа тикета новых ошибок ноль.
+
+## 2026-07-22 — PHASE-01/24-ai-insights-endpoint-button
+
+Тикет: AI-инсайты end-to-end — app/llm/ (anthropic, claude-sonnet-5), таблица ai_reports, POST /api/v1/insights/, кнопка «Разбор периода» на Dashboard. Живой прогон ждёт ANTHROPIC_API_KEY; имплементация и тесты — на моках. Затронуто 13 файлов backend (8 new, 5 mod) + 2 файла frontend (0 new, 2 mod).
+
+Backend new:
+- `app/llm/__init__.py` — **new**: пакет LLM-оркестрации, единственное место с импортом anthropic.
+- `app/llm/client.py` — **new**: `InsightsClient` (интерфейс, mock-boundary для тестов) + `AnthropicInsightsClient` (AsyncAnthropic, claude-sonnet-5, timeout 120s); `LLMError` — маппинг ошибок SDK без утечки контента/ключа в сообщения.
+- `app/llm/context.py` — **new**: `build_period_context` — агрегаты table-логики (имена категорий/полей резолвятся) + тексты журнала за период; лимит 200 записей журнала.
+- `app/llm/prompts.py` — **new**: системный промпт (тренды/пропуски/корреляции/2-3 рекомендации, ответ на русском).
+- `app/models/ai_report.py` — **new**: модель AIReport (id, period_days, content, model, created_at).
+- `app/schemas/insight.py` — **new**: InsightRequest (period_days default 30, 1..366) и InsightResponse.
+- `app/crud/insight.py` — **new**: create_ai_report.
+- `app/api/insights.py` — **new**: POST /insights/ — 503 без ключа (dependency `get_llm_client` -> None), 502 на LLMError (ничего не сохраняем), 201 + сохранённый отчёт.
+- `alembic/versions/2026_07_22_1600-3f2a9c1b7e44_ai_reports_table.py` — **new**: reversible миграция ai_reports (проверена upgrade/downgrade/upgrade на dev-БД).
+
+Backend mod:
+- `app/core/config.py` — **mod**: ANTHROPIC_API_KEY="" (пустой = фича off).
+- `app/main.py` — **mod**: подключён insights router под API-key auth.
+- `app/models/__init__.py`, `app/schemas/__init__.py` — **mod**: re-export AIReport / Insight-схем.
+- `pyproject.toml` — **mod**: + anthropic (uv add).
+- `tests/test_insights.py` — **new**: 6 тестов — happy path (отчёт сохранён), 503 без ключа, 502 на исключение клиента (ничего не сохранено), дефолт 30 дней, unit-тесты build_period_context (таблица+журнал в контексте, период в тексте). Мок на границе app/llm через dependency override.
+
+Frontend mod:
+- `lib/api.ts` — **mod**: insightsAPI.create (POST /insights/) + тип AIReport.
+- `app/page.tsx` — **mod**: панель AI-разбора на Dashboard — кнопка «Разбор периода», неоновый лоадер (ping + glow), минимальный MD-рендер отчёта без новых зависимостей, ошибка с кнопкой Retry.
+
+Feedback loops: pytest 83/83 green (локально, TEST_DATABASE_URL → localhost:5433), ruff check + format clean, mypy --strict app clean, eslint clean, next build green. `grep -r "import anthropic" app/ | grep -v app/llm/` — пусто.

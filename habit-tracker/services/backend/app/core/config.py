@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/01-backend-api-key-auth
-# summary: added API_KEY setting (empty = auth disabled, dev mode)
+# [review:need-review] PHASE-01/24-ai-insights-endpoint-button
+# summary: added ANTHROPIC_API_KEY setting (empty = AI insights disabled)
 from pydantic_settings import BaseSettings
 
 
@@ -18,6 +18,9 @@ class Settings(BaseSettings):
 
     # Auth: empty string disables auth (dev mode, logs a warning)
     API_KEY: str = ""
+
+    # AI insights: empty string disables the feature (endpoint returns 503)
+    ANTHROPIC_API_KEY: str = ""
 
     # API
     API_V1_PREFIX: str = "/api/v1"

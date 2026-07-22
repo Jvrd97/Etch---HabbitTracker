@@ -1,8 +1,8 @@
 /**
  * API Client for Habit Tracker Backend
  */
-// [review:need-review] PHASE-01/17-table-groups-sport-columns
-// summary: added tableAPI.get (GET /table) + TableResponse/TableCategoryMeta/TableDay/TableCell types
+// [review:need-review] PHASE-01/24-ai-insights-endpoint-button
+// summary: added insightsAPI.create (POST /insights) + AIReport type
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -141,6 +141,16 @@ export const tableAPI = {
     return fetcher<TableResponse>(
       `/table/?date_from=${dateFrom}&date_to=${dateTo}`
     );
+  },
+};
+
+// Insights API
+export const insightsAPI = {
+  create: async (periodDays?: number) => {
+    return fetcher<AIReport>('/insights/', {
+      method: 'POST',
+      body: JSON.stringify(periodDays !== undefined ? { period_days: periodDays } : {}),
+    });
   },
 };
 
@@ -300,6 +310,14 @@ export interface JournalEntryCreate {
 export interface JournalListResponse {
   total: number;
   items: JournalEntry[];
+}
+
+export interface AIReport {
+  id: number;
+  period_days: number;
+  content: string;
+  model: string;
+  created_at: string;
 }
 
 export interface TableCategoryMeta {

@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/17-table-groups-sport-columns
-# summary: re-export TableCategoryMeta
+# [review:need-review] PHASE-01/24-ai-insights-endpoint-button
+# summary: re-export insight schemas (InsightRequest, InsightResponse)
 from app.schemas.category import (
     CategoryCreate,
     CategoryUpdate,
@@ -22,6 +22,10 @@ from app.schemas.journal import (
     JournalEntryUpdate,
     JournalEntryResponse,
     JournalEntryListResponse,
+)
+from app.schemas.insight import (
+    InsightRequest,
+    InsightResponse,
 )
 from app.schemas.table import (
     TableCategoryMeta,
@@ -48,6 +52,8 @@ __all__ = [
     "JournalEntryUpdate",
     "JournalEntryResponse",
     "JournalEntryListResponse",
+    "InsightRequest",
+    "InsightResponse",
     "TableCategoryMeta",
     "TableCell",
     "TableDay",

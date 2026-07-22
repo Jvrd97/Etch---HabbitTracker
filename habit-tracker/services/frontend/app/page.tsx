@@ -1,9 +1,9 @@
 'use client';
-// [review:need-review] PHASE-01/adhoc-lime-redesign
-// summary: Dashboard restyled as Lime Tech hero score card, KPI row, recent activity and quick actions
+// [review:need-review] PHASE-01/24-ai-insights-endpoint-button
+// summary: added AI insights panel — «Разбор периода» button, neon loader, MD report, error with Retry
 
 import { useEffect, useState } from 'react';
-import { categoriesAPI, entriesAPI, journalAPI, Entry } from '@/lib/api';
+import { categoriesAPI, entriesAPI, insightsAPI, journalAPI, AIReport, Entry } from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import {
@@ -14,6 +14,8 @@ import {
   Plus,
   PenLine,
   FolderPlus,
+  Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -59,9 +61,51 @@ function ProgressRing({ progress }: { progress: number }) {
   );
 }
 
+function InsightMarkdown({ content }: { content: string }) {
+  // Minimal MD rendering (headings + bullet lists + paragraphs), no extra deps
+  const lines = content.split('\n');
+  return (
+    <div className="space-y-2 text-text-secondary text-base leading-relaxed">
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (trimmed === '') return null;
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4 key={i} className="text-base font-semibold text-text-primary pt-2">
+              {trimmed.slice(4)}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith('## ')) {
+          return (
+            <h3 key={i} className="text-lg font-semibold text-lime pt-3">
+              {trimmed.slice(3)}
+            </h3>
+          );
+        }
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <p key={i} className="pl-4 relative before:content-['•'] before:absolute before:left-0 before:text-lime">
+              {trimmed.slice(2)}
+            </p>
+          );
+        }
+        return <p key={i}>{trimmed}</p>;
+      })}
+    </div>
+  );
+}
+
+type InsightState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; report: AIReport };
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [insight, setInsight] = useState<InsightState>({ status: 'idle' });
   const [stats, setStats] = useState({
     categoriesCount: 0,
     entriesCount: 0,
@@ -94,6 +138,19 @@ export default function Dashboard() {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateInsight = async () => {
+    setInsight({ status: 'loading' });
+    try {
+      const report = await insightsAPI.create();
+      setInsight({ status: 'ready', report });
+    } catch (err) {
+      setInsight({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to generate insight',
+      });
     }
   };
 
@@ -168,6 +225,71 @@ export default function Dashboard() {
             <Plus className="w-4 h-4" strokeWidth={2} />
             Log entry
           </Link>
+        </div>
+      </div>
+
+      {/* AI insights */}
+      <div className="bg-card border border-white/5 rounded-3xl overflow-hidden">
+        <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-lime/10">
+              <Sparkles className="w-5 h-5 text-lime" strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="text-[22px] font-semibold text-text-primary">AI-разбор</h2>
+              <p className="text-[13px] text-text-secondary">
+                Тренды, пропуски и корреляции за последние 30 дней
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={generateInsight}
+            disabled={insight.status === 'loading'}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          >
+            <Sparkles className="w-4 h-4" strokeWidth={2} />
+            Разбор периода
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          {insight.status === 'idle' && (
+            <p className="text-text-secondary text-base">
+              Нажмите «Разбор периода», чтобы получить AI-отчёт по вашим данным.
+            </p>
+          )}
+          {insight.status === 'loading' && (
+            <div className="flex items-center gap-4 py-6" role="status" aria-live="polite">
+              <span className="relative flex h-4 w-4 flex-shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime opacity-60" />
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-lime shadow-[0_0_16px_rgba(184,255,54,0.8)]" />
+              </span>
+              <p className="text-text-secondary">
+                Анализирую период… это может занять до пары минут.
+              </p>
+            </div>
+          )}
+          {insight.status === 'error' && (
+            <div className="flex items-center justify-between gap-4 flex-wrap py-2">
+              <p className="text-red-400">{insight.message}</p>
+              <button
+                type="button"
+                onClick={generateInsight}
+                className="inline-flex items-center gap-2 px-5 py-2.5 border border-lime/40 text-lime rounded-3xl font-medium transition-all duration-200 hover:bg-lime/10"
+              >
+                <RotateCcw className="w-4 h-4" strokeWidth={2} />
+                Retry
+              </button>
+            </div>
+          )}
+          {insight.status === 'ready' && (
+            <div>
+              <InsightMarkdown content={insight.report.content} />
+              <p className="mt-5 text-[13px] text-text-disabled">
+                Период: {insight.report.period_days} дн. · Модель: {insight.report.model}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
