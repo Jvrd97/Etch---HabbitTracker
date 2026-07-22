@@ -43,7 +43,7 @@ async function fetcher<T>(
 // Categories API
 export const categoriesAPI = {
   getAll: async (activeOnly = true) => {
-    return fetcher<Category[]>(`/categories?active_only=${activeOnly}`);
+    return fetcher<Category[]>(`/categories/?active_only=${activeOnly}`);
   },
 
   getById: async (id: number) => {
@@ -51,7 +51,7 @@ export const categoriesAPI = {
   },
 
   create: async (data: CategoryCreate) => {
-    return fetcher<Category>('/categories', {
+    return fetcher<Category>('/categories/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -94,7 +94,7 @@ export const entriesAPI = {
     if (params?.skip) query.append('skip', params.skip.toString());
     if (params?.limit) query.append('limit', params.limit.toString());
 
-    return fetcher<Entry[]>(`/entries?${query.toString()}`);
+    return fetcher<Entry[]>(`/entries/?${query.toString()}`);
   },
 
   getById: async (id: number) => {
@@ -102,7 +102,7 @@ export const entriesAPI = {
   },
 
   create: async (data: EntryCreate) => {
-    return fetcher<Entry>('/entries', {
+    return fetcher<Entry>('/entries/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -180,7 +180,7 @@ export const journalAPI = {
     if (params?.skip) query.append('skip', params.skip.toString());
     if (params?.limit) query.append('limit', params.limit.toString());
 
-    return fetcher<JournalListResponse>(`/journal?${query.toString()}`);
+    return fetcher<JournalListResponse>(`/journal/?${query.toString()}`);
   },
 
   getById: async (id: number) => {
@@ -188,7 +188,7 @@ export const journalAPI = {
   },
 
   create: async (data: JournalEntryCreate) => {
-    return fetcher<JournalEntry>('/journal', {
+    return fetcher<JournalEntry>('/journal/', {
       method: 'POST',
       body: JSON.stringify(data),
     });

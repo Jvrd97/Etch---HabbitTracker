@@ -7,10 +7,11 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-# Async engine (echo=True logs SQL queries in dev)
+# Async engine. SQL echo is off: statement logging would leak journal text
+# and other personal values into logs (project rule: no PII in logs).
 engine = create_async_engine(
     settings.ASYNC_DATABASE_URL,
-    echo=True,
+    echo=False,
     future=True,
 )
 

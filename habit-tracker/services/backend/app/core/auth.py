@@ -17,13 +17,18 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_warned_auth_disabled = False
+
 
 async def require_api_key(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> None:
     """Reject the request with 401 unless a valid X-API-Key header is present."""
+    global _warned_auth_disabled
     if not settings.API_KEY:
-        logger.warning("API_KEY is not set; auth is DISABLED (dev mode)")
+        if not _warned_auth_disabled:
+            logger.warning("API_KEY is not set; auth is DISABLED (dev mode)")
+            _warned_auth_disabled = True
         return
     if x_api_key is None or not secrets.compare_digest(x_api_key, settings.API_KEY):
         raise HTTPException(
