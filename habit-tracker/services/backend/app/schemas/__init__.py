@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/16-checklist-upsert-today-page
-# summary: re-export ChecklistUpsertRequest
+# [review:need-review] PHASE-01/17-table-groups-sport-columns
+# summary: re-export TableCategoryMeta
 from app.schemas.category import (
     CategoryCreate,
     CategoryUpdate,
@@ -24,6 +24,7 @@ from app.schemas.journal import (
     JournalEntryListResponse,
 )
 from app.schemas.table import (
+    TableCategoryMeta,
     TableCell,
     TableDay,
     TableResponse,
@@ -47,6 +48,7 @@ __all__ = [
     "JournalEntryUpdate",
     "JournalEntryResponse",
     "JournalEntryListResponse",
+    "TableCategoryMeta",
     "TableCell",
     "TableDay",
     "TableResponse",

@@ -1,15 +1,18 @@
-# [review:need-review] PHASE-01/04-backend-table-endpoint
-# summary: per-day aggregation for the table view (number -> sum, boolean -> any, other -> last by created_at)
+# [review:need-review] PHASE-01/17-table-groups-sport-columns
+# summary: table view aggregation; added category metadata (group, display_mode, primary field = first by order)
 import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import cast
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Entry, EntryValue, Field
+from app.crud import category as category_crud
+from app.models import Category, Entry, EntryValue, Field
 from app.models.field import FieldType
-from app.schemas.table import TableCell, TableDay, TableResponse
+from app.schemas.category import CategoryDisplayMode
+from app.schemas.table import TableCategoryMeta, TableCell, TableDay, TableResponse
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,27 @@ class _CellAccumulator:
         return self.last_value
 
 
+def _category_meta(category: Category) -> TableCategoryMeta:
+    """Build table metadata for a category; primary field = first by (order, id)."""
+    primary = min(category.fields, key=lambda f: (f.order, f.id), default=None)
+    return TableCategoryMeta(
+        id=category.id,
+        name=category.name,
+        # DB column is a plain str constrained to the same values as the Literal
+        display_mode=cast(CategoryDisplayMode, category.display_mode),
+        group=category.group,
+        primary_field_id=primary.id if primary is not None else None,
+        primary_field_name=primary.name if primary is not None else None,
+        primary_field_type=primary.field_type.value if primary is not None else None,
+    )
+
+
+async def _get_category_metas(db: AsyncSession) -> list[TableCategoryMeta]:
+    """Active categories with grouping metadata, ordered by name."""
+    categories = await category_crud.get_categories(db, limit=None, active_only=True)
+    return [_category_meta(category) for category in categories]
+
+
 async def get_table(
     db: AsyncSession,
     date_from: date,
@@ -70,6 +94,8 @@ async def get_table(
     """
     Build the table view for [date_from, date_to] (inclusive).
 
+    The response carries category metadata (group, display_mode, primary
+    field = first field by order) for tab/column layout on the client.
     Every day of the range is present in the response; days without
     entries have an empty cells list. Aggregation per (category, field):
     number -> sum, boolean -> any, text/select/date/etc -> last by created_at.
@@ -126,4 +152,4 @@ async def get_table(
         )
         current += timedelta(days=1)
 
-    return TableResponse(days=days)
+    return TableResponse(categories=await _get_category_metas(db), days=days)

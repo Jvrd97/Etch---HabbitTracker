@@ -1,8 +1,8 @@
 /**
  * API Client for Habit Tracker Backend
  */
-// [review:need-review] PHASE-01/16-checklist-upsert-today-page
-// summary: added entriesAPI.upsertChecklist (PUT /entries/checklist) + ChecklistUpsert type
+// [review:need-review] PHASE-01/17-table-groups-sport-columns
+// summary: added tableAPI.get (GET /table) + TableResponse/TableCategoryMeta/TableDay/TableCell types
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -131,6 +131,15 @@ export const entriesAPI = {
   getByDateRange: async (categoryId: number, startDate: string, endDate: string) => {
     return fetcher<Entry[]>(
       `/entries/category/${categoryId}/range?start_date=${startDate}&end_date=${endDate}`
+    );
+  },
+};
+
+// Table API
+export const tableAPI = {
+  get: async (dateFrom: string, dateTo: string) => {
+    return fetcher<TableResponse>(
+      `/table/?date_from=${dateFrom}&date_to=${dateTo}`
     );
   },
 };
@@ -291,4 +300,31 @@ export interface JournalEntryCreate {
 export interface JournalListResponse {
   total: number;
   items: JournalEntry[];
+}
+
+export interface TableCategoryMeta {
+  id: number;
+  name: string;
+  display_mode: CategoryDisplayMode;
+  group: string | null;
+  primary_field_id: number | null;
+  primary_field_name: string | null;
+  primary_field_type: string | null;
+}
+
+export interface TableCell {
+  category_id: number;
+  field_id: number;
+  aggregated_value: string | null;
+  entry_count: number;
+}
+
+export interface TableDay {
+  date: string;
+  cells: TableCell[];
+}
+
+export interface TableResponse {
+  categories: TableCategoryMeta[];
+  days: TableDay[];
 }

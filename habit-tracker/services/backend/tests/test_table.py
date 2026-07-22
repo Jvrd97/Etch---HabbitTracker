@@ -2,9 +2,10 @@
 Tests for the table view endpoint (per-day aggregation).
 """
 
-# [review:need-review] PHASE-01/04-backend-table-endpoint
-# summary: API tests for GET /api/v1/table — sum/any/last aggregation, empty days, range limits, non-numeric warning
+# [review:need-review] PHASE-01/17-table-groups-sport-columns
+# summary: API tests for GET /api/v1/table; added category metadata tests (group, primary field = first by order)
 import logging
+from typing import Any, cast
 
 import pytest
 from httpx import AsyncClient
@@ -255,6 +256,98 @@ class TestTableAggregation:
         assert isinstance(warnings[0].__dict__["entry_id"], int)
         # PII-safe: the raw value must not leak into the log record
         assert "not-a-number" not in warnings[0].getMessage()
+
+
+async def _create_category(
+    client: AsyncClient,
+    name: str,
+    group: str | None,
+    fields: list[dict[str, Any]],
+) -> dict[str, Any]:
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": name, "group": group, "fields": fields},
+    )
+    assert response.status_code == 201
+    return cast("dict[str, Any]", response.json())
+
+
+@pytest.mark.asyncio
+class TestTableCategoryMeta:
+    """Tests for category metadata (group, primary field) in GET /api/v1/table."""
+
+    async def test_categories_metadata_includes_group(
+        self, client: AsyncClient
+    ) -> None:
+        """Two groups + a category without group: group is passed through, None kept."""
+        await _create_category(
+            client,
+            "Push-ups",
+            "Sport",
+            [{"name": "Count", "field_type": "number", "order": 1}],
+        )
+        await _create_category(
+            client,
+            "Squats",
+            "Sport",
+            [{"name": "Count", "field_type": "number", "order": 1}],
+        )
+        await _create_category(
+            client,
+            "Mood",
+            None,
+            [{"name": "Note", "field_type": "text", "order": 1}],
+        )
+
+        response = await client.get(
+            "/api/v1/table?date_from=2024-01-15&date_to=2024-01-15"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        by_name = {c["name"]: c for c in data["categories"]}
+        assert by_name["Push-ups"]["group"] == "Sport"
+        assert by_name["Squats"]["group"] == "Sport"
+        assert by_name["Mood"]["group"] is None
+        assert by_name["Push-ups"]["display_mode"] == "form"
+
+    async def test_primary_field_is_first_by_order(self, client: AsyncClient) -> None:
+        """Primary field of a category is its first field by order."""
+        category = await _create_category(
+            client,
+            "Running",
+            "Sport",
+            [
+                {"name": "Comment", "field_type": "text", "order": 2},
+                {"name": "Distance", "field_type": "number", "order": 1},
+            ],
+        )
+        distance_id = _field_id(category, "Distance")
+
+        response = await client.get(
+            "/api/v1/table?date_from=2024-01-15&date_to=2024-01-15"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        meta = next(c for c in data["categories"] if c["id"] == category["id"])
+        assert meta["primary_field_id"] == distance_id
+        assert meta["primary_field_name"] == "Distance"
+        assert meta["primary_field_type"] == "number"
+
+    async def test_category_without_fields_has_no_primary_field(
+        self, client: AsyncClient
+    ) -> None:
+        """A category with no fields is present with primary_field_id None."""
+        category = await _create_category(client, "Empty", None, [])
+
+        response = await client.get(
+            "/api/v1/table?date_from=2024-01-15&date_to=2024-01-15"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        meta = next(c for c in data["categories"] if c["id"] == category["id"])
+        assert meta["primary_field_id"] is None
+        assert meta["primary_field_name"] is None
+        assert meta["primary_field_type"] is None
 
 
 @pytest.mark.asyncio

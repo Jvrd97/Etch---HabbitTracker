@@ -29,15 +29,17 @@ async def get_category_by_name(db: AsyncSession, name: str) -> Category | None:
 
 
 async def get_categories(
-    db: AsyncSession, skip: int = 0, limit: int = 100, active_only: bool = True
+    db: AsyncSession, skip: int = 0, limit: int | None = 100, active_only: bool = True
 ) -> list[Category]:
-    """Получить список категорий"""
+    """Получить список категорий; limit=None отключает пагинацию"""
     query = select(Category).options(selectinload(Category.fields))
 
     if active_only:
         query = query.where(Category.is_active.is_(True))
 
-    query = query.offset(skip).limit(limit).order_by(Category.name)
+    query = query.offset(skip).order_by(Category.name)
+    if limit is not None:
+        query = query.limit(limit)
 
     result = await db.execute(query)
     return list(result.scalars().all())

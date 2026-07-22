@@ -37,3 +37,13 @@ Feedback loops: tsc --noEmit clean, eslint clean, next build green.
 Попутно: `catch (err: any)` заменён на `catch (err)` с narrowing через `instanceof Error` (запрет `any` по стандартам проекта); `as any` на field_type заменён на `as FieldCreate['field_type']`.
 
 Feedback loop: `bun run build` (Next.js 16.1.6, Turbopack) — зелёный, TypeScript чистый.
+
+## 2026-07-22 — PHASE-01/17-table-groups-sport-columns
+
+Тикет: страница `/table` — вкладки по группам категорий, колонки = категории (значение primary-поля по дням), тап по ячейке открывает панель записей дня с редактированием/удалением. Затронуто 3 файла (1 new, 2 mod).
+
+- `app/table/page.tsx` — **new**: вкладки-группы (категории без группы → вкладка Other, категории без полей скрыты), таблица за последние 14 дней (новые сверху), ячейка = агрегированное значение primary-поля; тап → модальная панель `DayEntriesPanel` (записи дня по категории, load через effect с cancellation-флагом + refresh-счётчик), `EntryEditor` — правка значений через `PATCH /entries/{id}` и удаление через `DELETE`; после сохранения таблица перезагружается.
+- `lib/api.ts` — **mod**: `tableAPI.get(date_from, date_to)` и типы `TableResponse`/`TableCategoryMeta`/`TableDay`/`TableCell`.
+- `components/Navigation.tsx` — **mod**: пункт Table (иконка Table2) между Today и Categories.
+
+Feedback loops: tsc --noEmit clean, eslint clean (react-hooks/set-state-in-effect устранён рефакторингом effect), next build green (route `/table` собирается).

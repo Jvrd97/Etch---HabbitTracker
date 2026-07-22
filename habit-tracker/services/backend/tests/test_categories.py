@@ -7,6 +7,10 @@ Tests for Category CRUD operations.
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.crud import category as category_crud
+from app.models import Category
 
 
 @pytest.mark.asyncio
@@ -317,3 +321,20 @@ class TestCategoryFields:
             json={"name": "Test", "field_type": "text"},
         )
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestGetCategoriesLimit:
+    """Tests for the limit parameter of crud.category.get_categories."""
+
+    async def test_limit_none_returns_all(self, db_session: AsyncSession) -> None:
+        """limit=None disables pagination and returns every active category."""
+        for i in range(3):
+            db_session.add(Category(name=f"Cat {i}"))
+        await db_session.commit()
+
+        limited = await category_crud.get_categories(db_session, limit=2)
+        assert len(limited) == 2
+
+        unlimited = await category_crud.get_categories(db_session, limit=None)
+        assert len(unlimited) == 3

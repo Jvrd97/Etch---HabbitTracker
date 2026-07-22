@@ -1,14 +1,15 @@
 'use client';
-// [review:need-review] PHASE-01/16-checklist-upsert-today-page
-// summary: added Today nav item (lime redesign nav otherwise unchanged)
+// [review:need-review] PHASE-01/17-table-groups-sport-columns
+// summary: added Table nav item (grouped table view)
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderKanban, CalendarDays, BookOpen, Sun } from 'lucide-react';
+import { Home, FolderKanban, CalendarDays, BookOpen, Sun, Table2 } from 'lucide-react';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Today', href: '/today', icon: Sun },
+  { name: 'Table', href: '/table', icon: Table2 },
   { name: 'Categories', href: '/categories', icon: FolderKanban },
   { name: 'Entries', href: '/entries', icon: CalendarDays },
   { name: 'Journal', href: '/journal', icon: BookOpen },

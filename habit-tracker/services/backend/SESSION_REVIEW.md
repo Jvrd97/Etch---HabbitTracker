@@ -93,3 +93,16 @@ Feedback loops: pytest 59/59 green (в контейнере `habit_backend`), ru
 - `app/schemas/entry.py` — **mod**: убраны неиспользуемые импорты (`Field`, `Dict`, `Any`).
 
 Feedback loops: pytest 54/54 green (в контейнере `habit_backend`), ruff clean (app + tests), mypy strict clean на `auth.py`/`config.py`, mypy clean на новых/изменённых тестах (легаси-дерево целиком не mypy-clean — вне скоупа тикета).
+
+## 2026-07-22 — PHASE-01/17-table-groups-sport-columns
+
+Тикет: table view — метаданные категорий (group, display_mode, primary field) в ответе `GET /api/v1/table` для вкладок-групп и колонок-категорий на фронте. Затронуто 4 файла (0 new, 4 mod).
+
+- `app/schemas/table.py` — **mod**: новый DTO `TableCategoryMeta` (id, name, display_mode, group, primary_field_id/name/type); `TableResponse` дополнен полем `categories`.
+- `app/crud/table.py` — **mod**: `_get_category_metas` (активные категории + selectinload полей, сортировка по имени) и `_category_meta` (primary field = первое поле по `(order, id)`, у категории без полей — None); агрегация по дням не менялась.
+- `app/schemas/__init__.py` — **mod**: re-export `TableCategoryMeta`.
+- `tests/test_table.py` — **mod**: 3 новых API-теста (`TestTableCategoryMeta`): группы Sport/Sport/None проходят насквозь, primary = первое поле по order (не по порядку создания), категория без полей — primary None. Новые тесты типизированы под mypy --strict.
+
+Schema-слой: миграция не нужна — колонки `display_mode`/`group` добавлены тикетом #15.
+
+Feedback loops: pytest 74/74 green (локально, TEST_DATABASE_URL → localhost:5433), ruff clean, `mypy app` clean (легаси-долг в `seed_data.py`/тестах — 117 ошибок до и после, ноль новых).
