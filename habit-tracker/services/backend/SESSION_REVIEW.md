@@ -142,3 +142,17 @@ Frontend mod:
 - `app/page.tsx` — **mod**: панель AI-разбора на Dashboard — кнопка «Разбор периода», неоновый лоадер (ping + glow), минимальный MD-рендер отчёта без новых зависимостей, ошибка с кнопкой Retry.
 
 Feedback loops: pytest 83/83 green (локально, TEST_DATABASE_URL → localhost:5433), ruff check + format clean, mypy --strict app clean, eslint clean, next build green. `grep -r "import anthropic" app/ | grep -v app/llm/` — пусто.
+
+## 2026-07-22 — PHASE-01/26-llm-cli-backend
+
+Файлов тронуто: 6 (2 new, 4 mod).
+
+Backend:
+- `app/llm/cli.py` — **new**: CliInsightsClient — `claude -p --output-format text` через asyncio.create_subprocess_exec, промпт в stdin (без argv-лимитов), таймаут с kill процесса; exit!=0 / таймаут / отсутствие бинаря / пустой stdout → LLMError без содержимого промпта/ответа в сообщении.
+- `app/llm/client.py` — **mod**: resolve_insights_client — выбор бэкенда по LLM_BACKEND (`cli` | `api`), пустой = auto (cli при пустом ANTHROPIC_API_KEY и найденном бинаре, иначе api); None = фича off (503).
+- `app/core/config.py` — **mod**: LLM_BACKEND (Literal "", "cli", "api"; дефолт "" = auto).
+- `app/api/insights.py` — **mod**: get_llm_client делегирует resolve_insights_client; 503-detail стал backend-agnostic.
+- `tests/test_llm_cli.py` — **new**: 12 тестов — CliInsightsClient с моком subprocess (успех + argv/stdin, exit!=0 без утечки контента, таймаут с kill, FileNotFoundError, пустой stdout) + 7 тестов выбора бэкенда (explicit cli/api, auto, недоступность → None/503).
+- `tests/test_insights.py` — **mod**: 503-тест теперь явно форсит `LLM_BACKEND=api` (auto-детект подхватил бы локальный claude CLI); добавлены return-аннотации (mypy strict).
+
+Feedback loops: pytest 95/95 green (TEST_DATABASE_URL → localhost:5433), ruff clean, mypy clean на всех файлах тикета (репо-wide mypy красный из-за pre-existing долга в нетронутых test_table/test_journal/test_categories/seed_data и др.). Живой прогон на dev-Mac: resolve → CliInsightsClient при пустом ключе, реальный `claude -p` вернул отчёт.

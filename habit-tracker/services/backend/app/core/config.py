@@ -1,5 +1,7 @@
-# [review:need-review] PHASE-01/24-ai-insights-endpoint-button
-# summary: added ANTHROPIC_API_KEY setting (empty = AI insights disabled)
+# [review:need-review] PHASE-01/26-llm-cli-backend
+# summary: added LLM_BACKEND setting (cli | api; empty = auto-detect)
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -19,8 +21,12 @@ class Settings(BaseSettings):
     # Auth: empty string disables auth (dev mode, logs a warning)
     API_KEY: str = ""
 
-    # AI insights: empty string disables the feature (endpoint returns 503)
+    # AI insights: empty string disables the api backend (endpoint returns 503)
     ANTHROPIC_API_KEY: str = ""
+
+    # LLM backend: "cli" (claude CLI binary) or "api" (Anthropic API).
+    # Empty = auto: cli when no API key and the binary is found, else api.
+    LLM_BACKEND: Literal["", "cli", "api"] = ""
 
     # API
     API_V1_PREFIX: str = "/api/v1"

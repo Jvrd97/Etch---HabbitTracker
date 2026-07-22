@@ -2,14 +2,15 @@
 Tests for the AI insights endpoint (POST /api/v1/insights/).
 """
 
-# [review:need-review] PHASE-01/24-ai-insights-endpoint-button
-# summary: API tests for insights (mocked LLM client: happy path, 503 no key, 502 LLM error) + context builder unit test
+# [review:need-review] PHASE-01/26-llm-cli-backend
+# summary: 503 test now forces api backend explicitly (auto-detect would pick a local claude CLI)
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.insights import get_llm_client
+from app.core.config import settings
 from app.llm.client import InsightsClient, LLMError
 from app.llm.context import build_period_context
 from app.main import app
@@ -44,14 +45,18 @@ async def _report_count(db: AsyncSession) -> int:
 class TestInsightsEndpoint:
     """POST /api/v1/insights/ with the LLM client mocked at the app/llm boundary."""
 
-    async def test_returns_503_without_api_key(self, client: AsyncClient):
-        """Empty ANTHROPIC_API_KEY -> feature off -> honest 503."""
+    async def test_returns_503_without_api_key(
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """api backend forced, empty ANTHROPIC_API_KEY -> feature off -> honest 503."""
+        monkeypatch.setattr(settings, "LLM_BACKEND", "api")
+        monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "")
         response = await client.post("/api/v1/insights/", json={})
         assert response.status_code == 503
 
     async def test_happy_path_returns_and_saves_report(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Mocked client -> 201 with content, report persisted to ai_reports."""
         fake = FakeInsightsClient(report="## Trends\n\n- more sleep")
         app.dependency_overrides[get_llm_client] = lambda: fake
@@ -70,7 +75,7 @@ class TestInsightsEndpoint:
 
     async def test_period_days_defaults_to_30(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Empty body -> period_days defaults to 30."""
         app.dependency_overrides[get_llm_client] = lambda: FakeInsightsClient()
         try:
@@ -83,7 +88,7 @@ class TestInsightsEndpoint:
 
     async def test_llm_error_returns_502_and_saves_nothing(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Client exception -> 502, no report row is written."""
         app.dependency_overrides[get_llm_client] = lambda: FailingInsightsClient()
         try:
@@ -101,7 +106,7 @@ class TestBuildPeriodContext:
 
     async def test_context_includes_table_and_journal_data(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Context contains category/field aggregates and journal texts."""
         category_response = await client.post(
             "/api/v1/categories",
@@ -144,7 +149,7 @@ class TestBuildPeriodContext:
         assert "7.5" in context
         assert "Slept well, felt focused" in context
 
-    async def test_context_mentions_period(self, db_session: AsyncSession):
+    async def test_context_mentions_period(self, db_session: AsyncSession) -> None:
         """Context states the requested period length."""
         context = await build_period_context(db_session, period_days=7)
         assert "7" in context
