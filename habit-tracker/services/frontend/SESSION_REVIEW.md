@@ -1,5 +1,18 @@
 # Session Review Log
 
+## 2026-07-22 — PHASE-01/20-category-page-chart
+
+Тикет: страница категории `/categories/[id]` с мультилинейным per-day графиком (Recharts): линии по number/time-полям, две Y-оси при разных единицах, легенда с toggle видимости, периоды 7/30/90/всё без перезагрузки (данные за год из GET /table/ режутся на клиенте). Затронуто 6 файлов (3 new, 3 mod).
+
+- `lib/chart-data.ts` — **new**: чистые функции — `chartableFields`, `buildSeries` (единицы: time→min, number→"(unit)" из имени; первая единица→left, остальные→right), `parseCellValue` (HH:MM[:SS]→минуты), `buildChartData`, `sliceByPeriod`, `chartDateRange`; палитра серий провалидирована dataviz-валидатором на поверхности `#1a1a1a`.
+- `lib/chart-data.test.ts` — **new**: 10 unit-тестов (bun:test) на все чистые функции, писались first (red→green).
+- `components/CategoryChart.tsx` — **new**: LineChart с двумя YAxis (правая рендерится только при второй единице), кнопки периодов, кастомная легенда-кнопки с toggle (`hide` у Line), tooltip с единицами.
+- `app/categories/[id]/page.tsx` — **new**: заголовок категории + график; параллельная загрузка `GET /categories/{id}` и `GET /table/` за 365 дней.
+- `app/categories/page.tsx` — **mod**: шапка карточки категории обёрнута в `Link` на `/categories/{id}`.
+- `package.json` — **mod**: `recharts` (dependency), `@types/bun` (devDependency для типов bun:test).
+
+Feedback loops: bun test 10/10 green, tsc --noEmit clean, eslint clean, next build green (route `/categories/[id]` собирается). Ручной smoke (две линии у Running Outdoor) не прогонялся — backend в сессии не поднят.
+
 ## 2026-07-22 — PHASE-01/16-checklist-upsert-today-page
 
 Тикет: страница `/today` — checklist-категории как сетка чипсов (тап = toggle с оптимистичным обновлением через `PUT /entries/checklist`), form-категории — быстрый ввод числа первого числового поля (`POST /entries`). Затронуто 3 файла (1 new, 2 mod).
@@ -55,3 +68,12 @@ Feedback loops: tsc --noEmit clean, eslint clean (react-hooks/set-state-in-effec
 - `app/table/page.tsx` — **mod**: discriminated union `TableColumn` (`value` | `check`); `buildTabs` раскрывает checklist-категории в колонки по boolean-полям (сортировка по order), form-категории остаются колонкой primary-поля; параллельная загрузка `GET /table` + `GET /categories` (полные списки полей); `handleToggle` — оптимистичный `setCellChecked` (правка/вставка ячейки в состоянии TableResponse) + `PUT /entries/checklist`, откат и ErrorAlert при ошибке; check-ячейка — кнопка с `aria-pressed`, иконка Check при true.
 
 Feedback loops: tsc --noEmit clean, eslint clean, next build green. Ручной smoke «снял галочку позавчера» — за пользователем (dev-стенд).
+
+## 2026-07-22 — PHASE-01/24-ai-insights-endpoint-button
+
+Тикет: кнопка «Разбор периода» на Dashboard. Затронуто 2 файла (0 new, 2 mod).
+
+- `lib/api.ts` — **mod**: insightsAPI.create (POST /insights/, optional period_days) + интерфейс AIReport.
+- `app/page.tsx` — **mod**: секция AI-разбора — discriminated union `InsightState` (idle/loading/error/ready), кнопка с disabled на время запроса, неоновый лоадер, `InsightMarkdown` (минимальный рендер ##/###/списков без новых зависимостей), ошибка (в т.ч. 503/502 с бэка) с кнопкой Retry.
+
+Feedback loops: eslint clean, next build (включая TypeScript) green.

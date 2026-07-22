@@ -1,8 +1,9 @@
 'use client';
-// [review:need-review] PHASE-01/15-category-display-mode-group
-// summary: category editor gets display mode select + group input; card shows both values
+// [review:need-review] PHASE-01/20-category-page-chart
+// summary: category editor with display mode/group; card header now links to /categories/[id] chart page
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   categoriesAPI,
   Category,
@@ -123,7 +124,11 @@ export default function CategoriesPage() {
               className="bg-card border border-white/5 rounded-3xl p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
             >
               <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3 min-w-0">
+                <Link
+                  href={`/categories/${category.id}`}
+                  aria-label={`Open ${category.name} chart`}
+                  className="flex items-center gap-3 min-w-0 group"
+                >
                   <div
                     className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
                     style={{ backgroundColor: `${category.color || DEFAULT_CATEGORY_COLOR}1f` }}
@@ -133,10 +138,10 @@ export default function CategoriesPage() {
                       style={{ backgroundColor: category.color || DEFAULT_CATEGORY_COLOR }}
                     />
                   </div>
-                  <h3 className="text-lg font-medium text-text-primary truncate">
+                  <h3 className="text-lg font-medium text-text-primary truncate transition-colors duration-200 group-hover:text-lime">
                     {category.name}
                   </h3>
-                </div>
+                </Link>
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={() => {
