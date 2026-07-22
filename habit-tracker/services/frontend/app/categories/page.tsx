@@ -1,14 +1,25 @@
 'use client';
-// [review:need-review] PHASE-01/adhoc-lime-redesign
-// summary: Categories page restyled with dark cards, color icon chips and Lime Tech form modal
+// [review:need-review] PHASE-01/15-category-display-mode-group
+// summary: category editor gets display mode select + group input; card shows both values
 
 import { useEffect, useState } from 'react';
-import { categoriesAPI, Category, CategoryCreate, FieldCreate } from '@/lib/api';
+import {
+  categoriesAPI,
+  Category,
+  CategoryCreate,
+  CategoryDisplayMode,
+  FieldCreate,
+} from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import { Plus, Pencil, Trash2, FolderKanban, X } from 'lucide-react';
 
 const DEFAULT_CATEGORY_COLOR = '#B8FF36';
+
+const DISPLAY_MODE_LABELS: Record<CategoryDisplayMode, string> = {
+  form: 'Form',
+  checklist: 'Checklist',
+};
 
 const inputClass =
   'w-full px-4 py-3 bg-surface border border-white/10 rounded-2xl text-text-primary placeholder:text-text-disabled outline-none transition-all duration-200 focus:border-lime focus:ring-2 focus:ring-lime/25';
@@ -173,7 +184,7 @@ export default function CategoriesPage() {
                 )}
               </div>
 
-              <div className="mt-5 pt-4 border-t border-white/5">
+              <div className="mt-5 pt-4 border-t border-white/5 flex flex-wrap gap-2">
                 <span
                   className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
                     category.is_active
@@ -183,6 +194,14 @@ export default function CategoriesPage() {
                 >
                   {category.is_active ? 'Active' : 'Inactive'}
                 </span>
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-lime/10 text-lime">
+                  {DISPLAY_MODE_LABELS[category.display_mode]}
+                </span>
+                {category.group && (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-text-secondary">
+                    {category.group}
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -202,6 +221,10 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
   const [name, setName] = useState(category?.name || '');
   const [description, setDescription] = useState(category?.description || '');
   const [color, setColor] = useState(category?.color || DEFAULT_CATEGORY_COLOR);
+  const [displayMode, setDisplayMode] = useState<CategoryDisplayMode>(
+    category?.display_mode ?? 'form'
+  );
+  const [group, setGroup] = useState(category?.group ?? '');
   const [isActive, setIsActive] = useState(category?.is_active ?? true);
   const [fields, setFields] = useState<FieldCreate[]>(
     category?.fields.map(f => ({
@@ -239,6 +262,8 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
         name,
         description,
         color,
+        display_mode: displayMode,
+        group: group.trim() || null,
         is_active: isActive,
         fields: fields.filter(f => f.name), // Only include fields with names
       };
@@ -299,6 +324,36 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
               rows={3}
               className={inputClass}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] font-medium text-text-secondary mb-2">
+                Display mode
+              </label>
+              <select
+                value={displayMode}
+                onChange={(e) => setDisplayMode(e.target.value as CategoryDisplayMode)}
+                className={inputClass}
+              >
+                <option value="form">{DISPLAY_MODE_LABELS.form}</option>
+                <option value="checklist">{DISPLAY_MODE_LABELS.checklist}</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-text-secondary mb-2">
+                Group
+              </label>
+              <input
+                type="text"
+                value={group}
+                onChange={(e) => setGroup(e.target.value)}
+                placeholder="e.g. Health"
+                maxLength={100}
+                className={inputClass}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -1,6 +1,13 @@
 # Session Review Log
 
-## 2026-07-22 — adhoc-lime-redesign
+## 2026-07-22 — PHASE-01/15-category-display-mode-group
+
+Тикет: редактор категории — select «Display mode» (Form / Checklist) и текстовое поле «Group»; значения видны бейджами в карточке категории. Затронуто 2 файла (0 new, 2 mod).
+
+- `lib/api.ts` — **mod**: тип `CategoryDisplayMode`, поля `display_mode`/`group` в `Category` и `CategoryCreate`.
+- `app/categories/page.tsx` — **mod**: в форме добавлены select режима отображения и input группы (пустая группа отправляется как `null`); в карточке — бейджи режима и группы рядом со статусом Active/Inactive.
+
+Feedback loops: tsc --noEmit clean, eslint clean, next build green.
 
 Тикет: `PHASE-01/adhoc-lime-redesign` — редизайн всего web-фронтенда под дизайн-систему «Lime Tech» (`docs/PHASE-01/design/design-system.md`, референс `refs/ref.png`). Чисто презентационный рефакторинг: API-вызовы и data flow не менялись, `lib/api.ts` не тронут.
 

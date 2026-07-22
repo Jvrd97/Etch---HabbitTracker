@@ -1,7 +1,10 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: builtin generics (list[X], X | None) instead of typing.List/Optional (mypy --strict)
+# [review:need-review] PHASE-01/15-category-display-mode-group
+# summary: added display_mode (Literal form|checklist) and group to category schemas
 from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Literal
+
+CategoryDisplayMode = Literal["form", "checklist"]
 
 
 class FieldBase(BaseModel):
@@ -53,6 +56,8 @@ class CategoryBase(BaseModel):
     description: str | None = None
     icon: str | None = Field(None, max_length=50)
     color: str | None = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
+    display_mode: CategoryDisplayMode = "form"
+    group: str | None = Field(None, max_length=100)
 
 
 class CategoryCreate(CategoryBase):
@@ -72,6 +77,8 @@ class CategoryUpdate(BaseModel):
     icon: str | None = Field(None, max_length=50)
     color: str | None = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     is_active: bool | None = None
+    display_mode: CategoryDisplayMode | None = None
+    group: str | None = Field(None, max_length=100)
 
 
 class CategoryResponse(CategoryBase):

@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: builtin generics (list[X], X | None) instead of typing.List/Optional (mypy --strict)
+# [review:need-review] PHASE-01/15-category-display-mode-group
+# summary: create_category passes display_mode and group through to the model
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -55,6 +55,8 @@ async def create_category(db: AsyncSession, category: CategoryCreate) -> Categor
         description=category.description,
         icon=category.icon,
         color=category.color,
+        display_mode=category.display_mode,
+        group=category.group,
     )
     db.add(db_category)
     await db.flush()  # Получаем ID категории

@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: Category model migrated to SQLAlchemy 2.0 Mapped[]/mapped_column (mypy --strict)
+# [review:need-review] PHASE-01/15-category-display-mode-group
+# summary: added display_mode (form|checklist, default form) and group columns to Category
 from __future__ import annotations
 
 from datetime import datetime
@@ -31,6 +31,10 @@ class Category(Base):
     icon: Mapped[str | None] = mapped_column(String(50))
     color: Mapped[str | None] = mapped_column(String(7))  # HEX color, e.g. #FF5733
     is_active: Mapped[bool] = mapped_column(default=True)
+    display_mode: Mapped[str] = mapped_column(
+        String(20), default="form", server_default="form"
+    )
+    group: Mapped[str | None] = mapped_column(String(100))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

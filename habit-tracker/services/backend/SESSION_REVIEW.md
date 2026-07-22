@@ -1,6 +1,16 @@
 # Session Review Log
 
-## 2026-07-21 — PHASE-01/13-backend-uv-mypy-ruff
+## 2026-07-22 — PHASE-01/15-category-display-mode-group
+
+Тикет: категории получают `display_mode` (`form` | `checklist`, default `form`) и `group` (varchar NULL) — схема, модель, Pydantic, API, тесты. Затронуто 5 файлов (1 new, 4 mod).
+
+- `alembic/versions/2026_07_22_1353-0d7b1cb0f163_category_display_mode_group.py` — **new**: reversible миграция `add_column display_mode (server_default 'form', not null)` + `group (nullable)`; upgrade/downgrade прогнаны на dev-БД.
+- `app/models/category.py` — **mod**: `display_mode: Mapped[str]` (String(20), default/server_default `form`), `group: Mapped[str | None]` (String(100)).
+- `app/schemas/category.py` — **mod**: `CategoryDisplayMode = Literal["form", "checklist"]`; поля добавлены в `CategoryBase` (default `form`) и `CategoryUpdate` (optional); невалидное значение даёт 422 через Pydantic.
+- `app/crud/category.py` — **mod**: `create_category` прокидывает `display_mode`/`group` в модель.
+- `tests/test_categories.py` — **mod**: +5 тестов (дефолты, create с checklist/Health, patch, 422 на мусорный display_mode в POST и PATCH).
+
+Feedback loops: pytest 66/66 green, ruff check + format clean, mypy --strict clean (27 файлов).
 
 Тикет: миграция backend на стандарты проекта (uv, mypy --strict, ruff). Затронуто ~30 файлов (3 new, 1 удалён, остальные mod).
 

@@ -2,6 +2,9 @@
 Tests for Category CRUD operations.
 """
 
+# [review:need-review] PHASE-01/15-category-display-mode-group
+# summary: added tests for display_mode/group create, patch, defaults and 422 on invalid mode
+
 import pytest
 from httpx import AsyncClient
 
@@ -63,6 +66,37 @@ class TestCategoryCreate:
         assert data["fields"][1]["name"] == "Quality"
         assert data["fields"][1]["field_type"] == "select"
         assert data["fields"][1]["options"] == "poor,average,excellent"
+
+    async def test_create_category_defaults_display_mode_and_group(
+        self, client: AsyncClient
+    ):
+        """Category created without new fields gets display_mode=form, group=None."""
+        response = await client.post("/api/v1/categories", json={"name": "Sleep"})
+        assert response.status_code == 201
+        data = response.json()
+        assert data["display_mode"] == "form"
+        assert data["group"] is None
+
+    async def test_create_category_with_display_mode_and_group(
+        self, client: AsyncClient
+    ):
+        """Category can be created with checklist mode and a group."""
+        response = await client.post(
+            "/api/v1/categories",
+            json={"name": "Vitamins", "display_mode": "checklist", "group": "Health"},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["display_mode"] == "checklist"
+        assert data["group"] == "Health"
+
+    async def test_create_category_invalid_display_mode(self, client: AsyncClient):
+        """Garbage display_mode is rejected with 422."""
+        response = await client.post(
+            "/api/v1/categories",
+            json={"name": "Vitamins", "display_mode": "carousel"},
+        )
+        assert response.status_code == 422
 
     async def test_create_category_duplicate_name(self, client: AsyncClient):
         """Test creating a category with duplicate name fails."""
@@ -188,6 +222,35 @@ class TestCategoryUpdate:
         assert data["description"] == "Monitor sleep patterns"
         assert data["color"] == "#FF0000"
         assert data["name"] == "Sleep"  # unchanged
+
+    async def test_update_category_display_mode_and_group(self, client: AsyncClient):
+        """Existing category can be switched to checklist mode and grouped."""
+        create_response = await client.post(
+            "/api/v1/categories", json={"name": "Vitamins"}
+        )
+        category_id = create_response.json()["id"]
+
+        response = await client.patch(
+            f"/api/v1/categories/{category_id}",
+            json={"display_mode": "checklist", "group": "Health"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_mode"] == "checklist"
+        assert data["group"] == "Health"
+        assert data["name"] == "Vitamins"  # unchanged
+
+    async def test_update_category_invalid_display_mode(self, client: AsyncClient):
+        """Garbage display_mode in PATCH is rejected with 422."""
+        create_response = await client.post(
+            "/api/v1/categories", json={"name": "Vitamins"}
+        )
+        category_id = create_response.json()["id"]
+
+        response = await client.patch(
+            f"/api/v1/categories/{category_id}", json={"display_mode": "grid"}
+        )
+        assert response.status_code == 422
 
     async def test_update_nonexistent_category(self, client: AsyncClient):
         """Test updating nonexistent category returns 404."""
