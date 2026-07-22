@@ -77,3 +77,13 @@ Feedback loops: tsc --noEmit clean, eslint clean, next build green. Ручной
 - `app/page.tsx` — **mod**: секция AI-разбора — discriminated union `InsightState` (idle/loading/error/ready), кнопка с disabled на время запроса, неоновый лоадер, `InsightMarkdown` (минимальный рендер ##/###/списков без новых зависимостей), ошибка (в т.ч. 503/502 с бэка) с кнопкой Retry.
 
 Feedback loops: eslint clean, next build (включая TypeScript) green.
+
+## 2026-07-22 — PHASE-01/21-chart-cumulative-mode
+
+Тикет: режим Cumulative для графика категории. Затронуто 3 файла (2 new, 1 mod).
+
+- `lib/chart-utils.ts` — **new**: чистая функция `cumulate(points)` — префиксные суммы по каждой серии независимо; null-пропуски остаются null и не ломают накопление; вход не мутируется.
+- `lib/chart-utils.test.ts` — **new**: unit-тесты cumulate (пустой ряд, монотонный рост, пропуски дней, несколько линий, отсутствие мутации).
+- `components/CategoryChart.tsx` — **mod**: переключатель «Per day | Cumulative» (aria-pressed), `cumulate` применяется после `sliceByPeriod` (накопление с начала выбранного периода); mode — отдельный useState, переживает смену периода.
+
+Feedback loops: bun test 15/15 green, tsc --noEmit clean, eslint clean.

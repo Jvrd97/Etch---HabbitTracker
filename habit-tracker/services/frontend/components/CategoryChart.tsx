@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/20-category-page-chart
-// summary: multi-line per-day chart for a category - number/time fields as lines, dual Y axes for distinct units, legend visibility toggle, 7/30/90/all periods
+// [review:need-review] PHASE-01/21-chart-cumulative-mode
+// summary: multi-line category chart - added Per day | Cumulative mode toggle (prefix sums via cumulate), mode survives period changes
 
 import { useMemo, useState } from 'react';
 import {
@@ -22,6 +22,16 @@ import {
   buildSeries,
   sliceByPeriod,
 } from '@/lib/chart-data';
+import { cumulate } from '@/lib/chart-utils';
+
+type ChartMode = 'perDay' | 'cumulative';
+
+const CHART_MODES: readonly ChartMode[] = ['perDay', 'cumulative'];
+
+const MODE_LABELS: Record<ChartMode, string> = {
+  perDay: 'Per day',
+  cumulative: 'Cumulative',
+};
 
 const CHART_HEIGHT_PX = 360;
 const DEFAULT_PERIOD: ChartPeriod = '30d';
@@ -41,13 +51,17 @@ interface CategoryChartProps {
 
 export default function CategoryChart({ category, days }: CategoryChartProps) {
   const [period, setPeriod] = useState<ChartPeriod>(DEFAULT_PERIOD);
+  const [mode, setMode] = useState<ChartMode>('perDay');
   const [hiddenKeys, setHiddenKeys] = useState<readonly string[]>([]);
 
   const series = useMemo(() => buildSeries(category.fields), [category.fields]);
-  const data = useMemo(
-    () => sliceByPeriod(buildChartData(days, category.id, category.fields), period),
-    [days, category.id, category.fields, period]
-  );
+  const data = useMemo(() => {
+    const sliced = sliceByPeriod(
+      buildChartData(days, category.id, category.fields),
+      period
+    );
+    return mode === 'cumulative' ? cumulate(sliced) : sliced;
+  }, [days, category.id, category.fields, period, mode]);
 
   const toggleSeries = (key: string) => {
     setHiddenKeys((prev) =>
@@ -88,6 +102,23 @@ export default function CategoryChart({ category, days }: CategoryChartProps) {
             }`}
           >
             {PERIOD_LABELS[p]}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Chart mode">
+        {CHART_MODES.map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            aria-pressed={m === mode}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
+              m === mode
+                ? 'bg-lime text-background border-lime shadow-[0_0_18px_rgba(184,255,54,0.25)]'
+                : 'bg-surface text-text-secondary border-white/10 hover:text-text-primary hover:bg-white/5'
+            }`}
+          >
+            {MODE_LABELS[m]}
           </button>
         ))}
       </div>
