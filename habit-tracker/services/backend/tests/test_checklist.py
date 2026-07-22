@@ -2,8 +2,11 @@
 Tests for checklist entry upsert (PUT /api/v1/entries/checklist).
 """
 
-# [review:need-review] PHASE-01/16-checklist-upsert-today-page
-# summary: idempotent checklist upsert - create, update same row, uncheck, 422 on form category
+# [review:need-review] PHASE-01/18-table-checklist-columns-backfill
+# summary: idempotent checklist upsert - create, update same row, uncheck, 422 on form category; backfill on past dates reflected in GET /table
+from datetime import date, timedelta
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
 
@@ -150,6 +153,61 @@ class TestChecklistUpsert:
             },
         )
         assert response.status_code == 422
+
+    async def test_backfill_past_date_visible_in_table(
+        self, client: AsyncClient, checklist_category: dict[str, Any]
+    ) -> None:
+        """Upsert on a past date (backfill) is reflected as a true cell in GET /table."""
+        b12 = field_id_by_name(checklist_category, "B12")
+        past = (date.today() - timedelta(days=2)).isoformat()
+
+        response = await client.put(
+            "/api/v1/entries/checklist",
+            json={
+                "category_id": checklist_category["id"],
+                "entry_date": past,
+                "values": {str(b12): True},
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["entry_date"] == past
+
+        table = await client.get(f"/api/v1/table/?date_from={past}&date_to={past}")
+        assert table.status_code == 200
+        day = next(d for d in table.json()["days"] if d["date"] == past)
+        cell = next(c for c in day["cells"] if c["field_id"] == b12)
+        assert cell["aggregated_value"] == "true"
+
+    async def test_backfill_uncheck_past_date_visible_in_table(
+        self, client: AsyncClient, checklist_category: dict[str, Any]
+    ) -> None:
+        """Unchecking a past date flips the table cell to false without duplicates."""
+        b12 = field_id_by_name(checklist_category, "B12")
+        past = (date.today() - timedelta(days=2)).isoformat()
+
+        await client.put(
+            "/api/v1/entries/checklist",
+            json={
+                "category_id": checklist_category["id"],
+                "entry_date": past,
+                "values": {str(b12): True},
+            },
+        )
+        response = await client.put(
+            "/api/v1/entries/checklist",
+            json={
+                "category_id": checklist_category["id"],
+                "entry_date": past,
+                "values": {str(b12): False},
+            },
+        )
+        assert response.status_code == 200
+
+        table = await client.get(f"/api/v1/table/?date_from={past}&date_to={past}")
+        day = next(d for d in table.json()["days"] if d["date"] == past)
+        cells = [c for c in day["cells"] if c["field_id"] == b12]
+        assert len(cells) == 1
+        assert cells[0]["aggregated_value"] == "false"
 
     async def test_put_to_unknown_category_returns_404(self, client: AsyncClient):
         """PUT to a nonexistent category returns 404."""

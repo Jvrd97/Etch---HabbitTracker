@@ -106,3 +106,11 @@ Feedback loops: pytest 54/54 green (в контейнере `habit_backend`), ru
 Schema-слой: миграция не нужна — колонки `display_mode`/`group` добавлены тикетом #15.
 
 Feedback loops: pytest 74/74 green (локально, TEST_DATABASE_URL → localhost:5433), ruff clean, `mypy app` clean (легаси-долг в `seed_data.py`/тестах — 117 ошибок до и после, ноль новых).
+
+## 2026-07-22 — PHASE-01/18-table-checklist-columns-backfill
+
+Тикет: table checklist-режим — API-тесты бэкфилла (upsert на прошлую дату отражается в GET /table). Backend-код не менялся (переиспользуются #16 upsert и #17 table). Затронут 1 файл (0 new, 1 mod).
+
+- `tests/test_checklist.py` — **mod**: 2 новых теста (`test_backfill_past_date_visible_in_table`, `test_backfill_uncheck_past_date_visible_in_table`) — PUT checklist на прошлую дату (today-2) даёт cell `aggregated_value: true` в GET /table, повторный PUT со значением false переворачивает ячейку без дубликатов. Новые тесты полностью типизированы (`-> None`, `checklist_category: dict[str, Any]`).
+
+Feedback loops: pytest 77/77 green (локально, TEST_DATABASE_URL → localhost:5433), ruff clean; `mypy tests/test_checklist.py` — 15 ошибок, все легаси (фикстуры и старые тесты, baseline без изменений), от диффа тикета новых ошибок ноль.

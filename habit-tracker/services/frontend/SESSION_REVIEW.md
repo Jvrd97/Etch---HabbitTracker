@@ -47,3 +47,11 @@ Feedback loop: `bun run build` (Next.js 16.1.6, Turbopack) — зелёный, T
 - `components/Navigation.tsx` — **mod**: пункт Table (иконка Table2) между Today и Categories.
 
 Feedback loops: tsc --noEmit clean, eslint clean (react-hooks/set-state-in-effect устранён рефакторингом effect), next build green (route `/table` собирается).
+
+## 2026-07-22 — PHASE-01/18-table-checklist-columns-backfill
+
+Тикет: вкладки checklist-групп на `/table` — колонки = boolean-поля checklist-категории, ячейка = галочка/пусто, тап по ячейке любого дня → toggle через PUT /entries/checklist (backfill задним числом) с оптимистичным обновлением и rollback при ошибке. Затронут 1 файл (0 new, 1 mod).
+
+- `app/table/page.tsx` — **mod**: discriminated union `TableColumn` (`value` | `check`); `buildTabs` раскрывает checklist-категории в колонки по boolean-полям (сортировка по order), form-категории остаются колонкой primary-поля; параллельная загрузка `GET /table` + `GET /categories` (полные списки полей); `handleToggle` — оптимистичный `setCellChecked` (правка/вставка ячейки в состоянии TableResponse) + `PUT /entries/checklist`, откат и ErrorAlert при ошибке; check-ячейка — кнопка с `aria-pressed`, иконка Check при true.
+
+Feedback loops: tsc --noEmit clean, eslint clean, next build green. Ручной smoke «снял галочку позавчера» — за пользователем (dev-стенд).

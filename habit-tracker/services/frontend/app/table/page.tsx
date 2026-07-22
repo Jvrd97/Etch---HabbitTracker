@@ -1,21 +1,26 @@
 'use client';
-// [review:need-review] PHASE-01/17-table-groups-sport-columns
-// summary: /table page - group tabs, days x category columns (primary field value), tap cell -> day entries panel (edit/delete)
+// [review:need-review] PHASE-01/18-table-checklist-columns-backfill
+// summary: /table page - checklist categories render boolean-field columns with toggleable check cells (optimistic PUT checklist backfill); form categories keep primary-field cells + day panel
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  categoriesAPI,
   entriesAPI,
   tableAPI,
+  Category,
   Entry,
+  Field,
   TableCategoryMeta,
   TableResponse,
 } from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import { Save, Table2, Trash2, X } from 'lucide-react';
+import { Check, Save, Table2, Trash2, X } from 'lucide-react';
 
 const DAYS_SHOWN = 14;
 const UNGROUPED_TAB = 'Other';
+const TRUE_VALUE = 'true';
+const FALSE_VALUE = 'false';
 
 function toISODate(d: Date): string {
   return d.toISOString().split('T')[0];
@@ -28,19 +33,55 @@ function dateRange(): { from: string; to: string } {
   return { from: toISODate(from), to: toISODate(to) };
 }
 
-/** Categories usable as table columns, grouped into tabs (null group -> Other). */
-function buildTabs(categories: TableCategoryMeta[]): Map<string, TableCategoryMeta[]> {
-  const tabs = new Map<string, TableCategoryMeta[]>();
-  const withPrimary = categories.filter((c) => c.primary_field_id !== null);
-  const named = withPrimary.filter((c) => c.group !== null);
-  const ungrouped = withPrimary.filter((c) => c.group === null);
-  for (const category of named) {
-    const key = category.group as string;
-    const list = tabs.get(key) ?? [];
-    list.push(category);
-    tabs.set(key, list);
+/** One table column: a form category's primary field, or a checklist boolean field. */
+type TableColumn =
+  | { kind: 'value'; category: TableCategoryMeta; fieldId: number }
+  | { kind: 'check'; category: TableCategoryMeta; fieldId: number; fieldName: string };
+
+function columnKey(column: TableColumn): string {
+  return `${column.category.id}:${column.fieldId}`;
+}
+
+function checklistBooleanFields(
+  category: TableCategoryMeta,
+  fieldsByCategory: Map<number, Field[]>
+): Field[] {
+  return (fieldsByCategory.get(category.id) ?? [])
+    .filter((f) => f.field_type === 'boolean')
+    .sort((a, b) => a.order - b.order);
+}
+
+/** Columns grouped into tabs (null group -> Other): checklist categories expand
+ *  into one column per boolean field, form categories keep their primary field. */
+function buildTabs(
+  categories: TableCategoryMeta[],
+  fieldsByCategory: Map<number, Field[]>
+): Map<string, TableColumn[]> {
+  const tabs = new Map<string, TableColumn[]>();
+  const push = (groupKey: string | null, columns: TableColumn[]) => {
+    if (columns.length === 0) return;
+    const key = groupKey ?? UNGROUPED_TAB;
+    tabs.set(key, [...(tabs.get(key) ?? []), ...columns]);
+  };
+  const named = categories.filter((c) => c.group !== null);
+  const ungrouped = categories.filter((c) => c.group === null);
+  for (const category of [...named, ...ungrouped]) {
+    if (category.display_mode === 'checklist') {
+      push(
+        category.group,
+        checklistBooleanFields(category, fieldsByCategory).map((field) => ({
+          kind: 'check' as const,
+          category,
+          fieldId: field.id,
+          fieldName: field.name,
+        }))
+      );
+    } else if (category.primary_field_id !== null) {
+      push(category.group, [
+        { kind: 'value', category, fieldId: category.primary_field_id },
+      ]);
+    }
   }
-  if (ungrouped.length > 0) tabs.set(UNGROUPED_TAB, ungrouped);
   return tabs;
 }
 
@@ -51,6 +92,9 @@ interface SelectedCell {
 
 export default function TablePage() {
   const [data, setData] = useState<TableResponse | null>(null);
+  const [fieldsByCategory, setFieldsByCategory] = useState<Map<number, Field[]>>(
+    new Map()
+  );
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,8 +103,14 @@ export default function TablePage() {
   const loadData = useCallback(async () => {
     try {
       const { from, to } = dateRange();
-      const response = await tableAPI.get(from, to);
+      const [response, categories] = await Promise.all([
+        tableAPI.get(from, to),
+        categoriesAPI.getAll(),
+      ]);
       setData(response);
+      setFieldsByCategory(
+        new Map(categories.map((c: Category) => [c.id, c.fields]))
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load table');
     } finally {
@@ -72,23 +122,85 @@ export default function TablePage() {
     loadData();
   }, [loadData]);
 
+  const cellValue = useCallback(
+    (date: string, categoryId: number, fieldId: number): string | null => {
+      const day = data?.days.find((d) => d.date === date);
+      const cell = day?.cells.find(
+        (c) => c.category_id === categoryId && c.field_id === fieldId
+      );
+      return cell?.aggregated_value ?? null;
+    },
+    [data]
+  );
+
+  /** Local (optimistic) write of one cell's aggregated value. */
+  const setCellChecked = useCallback(
+    (categoryId: number, fieldId: number, date: string, checked: boolean) => {
+      const value = checked ? TRUE_VALUE : FALSE_VALUE;
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          days: prev.days.map((day) => {
+            if (day.date !== date) return day;
+            const exists = day.cells.some(
+              (c) => c.category_id === categoryId && c.field_id === fieldId
+            );
+            return {
+              ...day,
+              cells: exists
+                ? day.cells.map((c) =>
+                    c.category_id === categoryId && c.field_id === fieldId
+                      ? { ...c, aggregated_value: value }
+                      : c
+                  )
+                : [
+                    ...day.cells,
+                    {
+                      category_id: categoryId,
+                      field_id: fieldId,
+                      aggregated_value: value,
+                      entry_count: 1,
+                    },
+                  ],
+            };
+          }),
+        };
+      });
+    },
+    []
+  );
+
+  /** Toggle a checklist cell on any day (backfill), optimistic with rollback. */
+  const handleToggle = useCallback(
+    async (categoryId: number, fieldId: number, date: string) => {
+      const current = cellValue(date, categoryId, fieldId) === TRUE_VALUE;
+      const next = !current;
+      setCellChecked(categoryId, fieldId, date, next);
+      try {
+        await entriesAPI.upsertChecklist({
+          category_id: categoryId,
+          entry_date: date,
+          values: { [fieldId]: next },
+        });
+      } catch (err) {
+        setCellChecked(categoryId, fieldId, date, current);
+        setError(err instanceof Error ? err.message : 'Failed to save check');
+      }
+    },
+    [cellValue, setCellChecked]
+  );
+
   if (loading) return <LoadingSpinner size="lg" />;
 
-  const tabs = data ? buildTabs(data.categories) : new Map<string, TableCategoryMeta[]>();
+  const tabs = data
+    ? buildTabs(data.categories, fieldsByCategory)
+    : new Map<string, TableColumn[]>();
   const tabNames = [...tabs.keys()];
   const currentTab =
     activeTab !== null && tabs.has(activeTab) ? activeTab : tabNames[0] ?? null;
   const columns = currentTab !== null ? tabs.get(currentTab) ?? [] : [];
   const days = data ? [...data.days].reverse() : [];
-
-  const cellValue = (date: string, category: TableCategoryMeta): string | null => {
-    const day = data?.days.find((d) => d.date === date);
-    const cell = day?.cells.find(
-      (c) =>
-        c.category_id === category.id && c.field_id === category.primary_field_id
-    );
-    return cell?.aggregated_value ?? null;
-  };
 
   return (
     <div className="space-y-8 animate-fade-rise">
@@ -139,14 +251,16 @@ export default function TablePage() {
                   <th className="px-4 py-3 text-left font-medium text-text-secondary">
                     Day
                   </th>
-                  {columns.map((category) => (
+                  {columns.map((column) => (
                     <th
-                      key={category.id}
+                      key={columnKey(column)}
                       className="px-4 py-3 text-left font-medium text-text-primary"
                     >
-                      {category.name}
+                      {column.kind === 'check' ? column.fieldName : column.category.name}
                       <span className="block text-xs font-normal text-text-disabled">
-                        {category.primary_field_name}
+                        {column.kind === 'check'
+                          ? column.category.name
+                          : column.category.primary_field_name}
                       </span>
                     </th>
                   ))}
@@ -158,13 +272,38 @@ export default function TablePage() {
                     <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
                       {day.date}
                     </td>
-                    {columns.map((category) => {
-                      const value = cellValue(day.date, category);
+                    {columns.map((column) => {
+                      const value = cellValue(day.date, column.category.id, column.fieldId);
+                      if (column.kind === 'check') {
+                        const isChecked = value === TRUE_VALUE;
+                        return (
+                          <td key={columnKey(column)} className="px-1 py-1">
+                            <button
+                              onClick={() =>
+                                handleToggle(column.category.id, column.fieldId, day.date)
+                              }
+                              aria-pressed={isChecked}
+                              aria-label={`${column.category.name}: ${column.fieldName} on ${day.date}`}
+                              className={`flex w-full items-center justify-center px-3 py-2 rounded-xl transition-all duration-200 hover:bg-white/5 ${
+                                isChecked ? 'text-lime' : 'text-text-disabled'
+                              }`}
+                            >
+                              {isChecked ? (
+                                <Check className="w-4 h-4" strokeWidth={2.5} />
+                              ) : (
+                                <span aria-hidden="true">—</span>
+                              )}
+                            </button>
+                          </td>
+                        );
+                      }
                       return (
-                        <td key={category.id} className="px-1 py-1">
+                        <td key={columnKey(column)} className="px-1 py-1">
                           <button
-                            onClick={() => setSelected({ category, date: day.date })}
-                            aria-label={`${category.name} on ${day.date}`}
+                            onClick={() =>
+                              setSelected({ category: column.category, date: day.date })
+                            }
+                            aria-label={`${column.category.name} on ${day.date}`}
                             className={`w-full text-left px-3 py-2 rounded-xl transition-all duration-200 hover:bg-white/5 ${
                               value !== null ? 'text-lime font-medium' : 'text-text-disabled'
                             }`}
