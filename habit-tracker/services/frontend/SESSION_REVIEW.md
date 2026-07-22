@@ -87,3 +87,15 @@ Feedback loops: eslint clean, next build (включая TypeScript) green.
 - `components/CategoryChart.tsx` — **mod**: переключатель «Per day | Cumulative» (aria-pressed), `cumulate` применяется после `sliceByPeriod` (накопление с начала выбранного периода); mode — отдельный useState, переживает смену периода.
 
 Feedback loops: bun test 15/15 green, tsc --noEmit clean, eslint clean.
+
+## 2026-07-22 — PHASE-01/22-category-page-entries-cards
+
+Тикет: страница категории — под графиком вся история entries карточками по датам, редактирование и удаление на месте; после мутации график перестраивается; общий список Entries переведён на общий компонент. Затронуто 5 файлов (3 new, 2 mod).
+
+- `lib/entry-groups.ts` — **new**: чистый хелпер `groupEntriesByDate` (извлечён из `app/entries/page.tsx`), сохраняет порядок дат и записей.
+- `lib/entry-groups.test.ts` — **new**: unit-тесты группировки (пустой вход, порядок first-seen, состав групп).
+- `components/EntryCard.tsx` — **new**: переиспользуемая карточка entry (извлечение из `app/entries/page.tsx`) + inline-редактирование (PATCH /entries/{id} с values/notes/date) и удаление (DELETE) внутри карточки; экспортирует `FieldValueInput` (type-aware input по field_type) и `entryInputClass` для форм.
+- `app/entries/page.tsx` — **mod**: карточки заменены на `EntryCard` (delete-логика ушла в компонент), группировка через `groupEntriesByDate`, switch по field_type в EntryForm заменён на `FieldValueInput`.
+- `app/categories/[id]/page.tsx` — **mod**: параллельная загрузка category + table + entries (limit 1000, пагинация out of scope); под графиком история entries по датам через `EntryCard`; `onMutated` инкрементирует refresh-счётчик — перезагружаются и entries, и данные графика.
+
+Feedback loops: bun test 17/17 green, tsc --noEmit clean, eslint clean, next build green. Ручной smoke «поправил запись → линия перестроилась» — за пользователем (dev-стенд).

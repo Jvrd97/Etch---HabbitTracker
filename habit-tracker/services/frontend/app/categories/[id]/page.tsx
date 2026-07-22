@@ -1,16 +1,21 @@
 'use client';
-// [review:need-review] PHASE-01/20-category-page-chart
-// summary: category detail page - header with category name plus per-day multi-line chart fed by GET /table over the last year
+// [review:need-review] PHASE-01/22-category-page-entries-cards
+// summary: category detail page - chart plus full entry history as editable EntryCard list; mutations reload entries and chart data
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { Category, TableDay, categoriesAPI, tableAPI } from '@/lib/api';
+import { ArrowLeft, Calendar } from 'lucide-react';
+import { Category, Entry, TableDay, categoriesAPI, entriesAPI, tableAPI } from '@/lib/api';
 import { chartDateRange } from '@/lib/chart-data';
+import { groupEntriesByDate } from '@/lib/entry-groups';
 import CategoryChart from '@/components/CategoryChart';
+import EntryCard from '@/components/EntryCard';
 import ErrorAlert from '@/components/ErrorAlert';
 import LoadingSpinner from '@/components/LoadingSpinner';
+
+/** Full history without pagination (ticket #22: pagination is out of scope). */
+const ENTRIES_FETCH_LIMIT = 1000;
 
 export default function CategoryDetailPage() {
   const params = useParams<{ id: string }>();
@@ -20,7 +25,9 @@ export default function CategoryDetailPage() {
 
   const [category, setCategory] = useState<Category | null>(null);
   const [days, setDays] = useState<TableDay[] | null>(null);
+  const [entries, setEntries] = useState<Entry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   useEffect(() => {
     if (!Number.isInteger(categoryId) || categoryId <= 0) return;
@@ -28,13 +35,15 @@ export default function CategoryDetailPage() {
     const load = async () => {
       try {
         const { from, to } = chartDateRange(new Date());
-        const [categoryResult, tableResult] = await Promise.all([
+        const [categoryResult, tableResult, entriesResult] = await Promise.all([
           categoriesAPI.getById(categoryId),
           tableAPI.get(from, to),
+          entriesAPI.getAll({ categoryId, limit: ENTRIES_FETCH_LIMIT }),
         ]);
         if (cancelled) return;
         setCategory(categoryResult);
         setDays(tableResult.days);
+        setEntries(entriesResult);
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : 'Failed to load category');
@@ -45,7 +54,13 @@ export default function CategoryDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, refreshCounter]);
+
+  const reload = useCallback(() => {
+    setRefreshCounter((n) => n + 1);
+  }, []);
+
+  const loaded = category !== null && days !== null && entries !== null;
 
   return (
     <div className="space-y-8 animate-fade-rise">
@@ -71,10 +86,50 @@ export default function CategoryDetailPage() {
         <ErrorAlert message={loadError} onDismiss={() => setLoadError(null)} />
       )}
 
-      {invalidId ? null : category === null || days === null ? (
+      {invalidId ? null : !loaded ? (
         !loadError && <LoadingSpinner size="lg" />
       ) : (
-        <CategoryChart category={category} days={days} />
+        <>
+          <CategoryChart category={category} days={days} />
+
+          {entries.length === 0 ? (
+            <div className="text-center py-16 bg-card border border-white/5 rounded-3xl">
+              <div className="inline-flex p-4 rounded-3xl bg-surface mb-4">
+                <Calendar className="w-8 h-8 text-text-disabled" strokeWidth={2} />
+              </div>
+              <h3 className="text-lg font-medium text-text-primary mb-1">
+                No entries yet
+              </h3>
+              <p className="text-text-secondary">
+                Entries for this category will appear here
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {groupEntriesByDate(entries).map(([date, dateEntries]) => (
+                <div key={date}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-[13px] font-medium uppercase tracking-widest text-lime">
+                      {date}
+                    </span>
+                    <div className="flex-1 h-px bg-white/5" />
+                  </div>
+                  <div className="space-y-4">
+                    {dateEntries.map((entry) => (
+                      <EntryCard
+                        key={entry.id}
+                        entry={entry}
+                        category={category}
+                        onMutated={reload}
+                        onError={setLoadError}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

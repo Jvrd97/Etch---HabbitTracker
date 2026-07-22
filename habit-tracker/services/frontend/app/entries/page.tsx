@@ -1,30 +1,16 @@
 'use client';
-// [review:need-review] PHASE-01/adhoc-lime-redesign
-// summary: Entries page restyled with date-grouped dark cards, filter chip bar and Lime Tech form modal
+// [review:need-review] PHASE-01/22-category-page-entries-cards
+// summary: Entries page migrated to shared EntryCard/FieldValueInput and lib groupEntriesByDate (card markup extracted)
 
 import { useEffect, useState } from 'react';
 import { entriesAPI, categoriesAPI, Entry, Category, EntryCreate, EntryValueCreate } from '@/lib/api';
+import { groupEntriesByDate } from '@/lib/entry-groups';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
+import EntryCard, { FieldValueInput, entryInputClass } from '@/components/EntryCard';
 import { Plus, Filter, X, Calendar } from 'lucide-react';
 
-const DEFAULT_CATEGORY_COLOR = '#B8FF36';
-
-const inputClass =
-  'w-full px-4 py-3 bg-surface border border-white/10 rounded-2xl text-text-primary placeholder:text-text-disabled outline-none transition-all duration-200 focus:border-lime focus:ring-2 focus:ring-lime/25';
-
-function groupByDate(entries: Entry[]): Array<[string, Entry[]]> {
-  const groups = new Map<string, Entry[]>();
-  for (const entry of entries) {
-    const existing = groups.get(entry.entry_date);
-    if (existing) {
-      existing.push(entry);
-    } else {
-      groups.set(entry.entry_date, [entry]);
-    }
-  }
-  return Array.from(groups.entries());
-}
+const inputClass = entryInputClass;
 
 export default function EntriesPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -55,19 +41,9 @@ export default function EntriesPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this entry?')) return;
-    try {
-      await entriesAPI.delete(id);
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete entry');
-    }
-  };
-
   if (loading) return <LoadingSpinner size="lg" />;
 
-  const grouped = groupByDate(entries);
+  const grouped = groupEntriesByDate(entries);
 
   return (
     <div className="space-y-8 animate-fade-rise">
@@ -149,63 +125,15 @@ export default function EntriesPage() {
                 <div className="flex-1 h-px bg-white/5" />
               </div>
               <div className="space-y-4">
-                {dateEntries.map((entry) => {
-                  const category = categories.find(c => c.id === entry.category_id);
-                  const categoryColor = category?.color || DEFAULT_CATEGORY_COLOR;
-                  return (
-                    <div
-                      key={entry.id}
-                      className="bg-card border border-white/5 rounded-3xl p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: `${categoryColor}1f` }}
-                          >
-                            <span
-                              className="w-3.5 h-3.5 rounded-full"
-                              style={{ backgroundColor: categoryColor }}
-                            />
-                          </div>
-                          <h3 className="text-lg font-medium text-text-primary truncate">
-                            {category?.name || 'Unknown Category'}
-                          </h3>
-                        </div>
-                        <button
-                          onClick={() => handleDelete(entry.id)}
-                          aria-label="Delete entry"
-                          className="p-2 rounded-full text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors duration-200 flex-shrink-0"
-                        >
-                          <X className="w-4 h-4" strokeWidth={2} />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {entry.values.map((value) => {
-                          const field = category?.fields.find(f => f.id === value.field_id);
-                          return (
-                            <div
-                              key={value.id}
-                              className="bg-surface border border-white/5 rounded-2xl p-3.5"
-                            >
-                              <p className="text-xs text-text-disabled mb-1">{field?.name}</p>
-                              <p className="text-sm font-medium text-text-primary break-words">
-                                {value.value}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {entry.notes && (
-                        <div className="mt-4 pt-4 border-t border-white/5">
-                          <p className="text-sm text-text-secondary">{entry.notes}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {dateEntries.map((entry) => (
+                  <EntryCard
+                    key={entry.id}
+                    entry={entry}
+                    category={categories.find((c) => c.id === entry.category_id)}
+                    onMutated={loadData}
+                    onError={setError}
+                  />
+                ))}
               </div>
             </div>
           ))}
@@ -320,61 +248,11 @@ function EntryForm({ categories, onClose, onSuccess }: EntryFormProps) {
                     {field.name} {field.is_required && '*'}
                   </label>
 
-                  {field.field_type === 'select' ? (
-                    <select
-                      value={values[field.id] || ''}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-                      required={field.is_required}
-                      className={inputClass}
-                    >
-                      <option value="">Select...</option>
-                      {field.options?.split(',').map((opt) => (
-                        <option key={opt} value={opt.trim()}>
-                          {opt.trim()}
-                        </option>
-                      ))}
-                    </select>
-                  ) : field.field_type === 'boolean' ? (
-                    <input
-                      type="checkbox"
-                      checked={values[field.id] === 'true'}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.checked.toString() })}
-                      className="w-5 h-5 accent-[#B8FF36] rounded"
-                    />
-                  ) : field.field_type === 'number' ? (
-                    <input
-                      type="number"
-                      value={values[field.id] || ''}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-                      required={field.is_required}
-                      step="any"
-                      className={inputClass}
-                    />
-                  ) : field.field_type === 'date' ? (
-                    <input
-                      type="date"
-                      value={values[field.id] || ''}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-                      required={field.is_required}
-                      className={inputClass}
-                    />
-                  ) : field.field_type === 'time' ? (
-                    <input
-                      type="time"
-                      value={values[field.id] || ''}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-                      required={field.is_required}
-                      className={inputClass}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={values[field.id] || ''}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-                      required={field.is_required}
-                      className={inputClass}
-                    />
-                  )}
+                  <FieldValueInput
+                    field={field}
+                    value={values[field.id] || ''}
+                    onChange={(value) => setValues({ ...values, [field.id]: value })}
+                  />
                 </div>
               ))}
             </div>
