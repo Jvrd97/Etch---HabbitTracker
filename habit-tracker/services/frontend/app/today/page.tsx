@@ -1,29 +1,19 @@
 'use client';
-// [review:need-review] PHASE-01/32-today-cumulative-counter
-// summary: Today page — quick number rows show the running daily total and add to it in place
+// [review:need-review] PHASE-01/28-today-avoid-card
+// summary: Today page — avoid categories render a streak card with relapse form; build number categories keep the running-total quick input
 
 import { useCallback, useEffect, useState } from 'react';
-import { categoriesAPI, entriesAPI, Category, Entry, Field } from '@/lib/api';
+import { categoriesAPI, entriesAPI, Category, CategoryStreak, Entry, Field } from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
+import AvoidStreakCard from '@/components/AvoidStreakCard';
+import { booleanFields, partitionTodayCategories } from '@/lib/today-categories';
 import { Check, Plus, Sun } from 'lucide-react';
 
 const TRUE_VALUE = 'true';
 
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];
-}
-
-function firstNumberField(category: Category): Field | undefined {
-  return [...category.fields]
-    .sort((a, b) => a.order - b.order)
-    .find((f) => f.field_type === 'number');
-}
-
-function booleanFields(category: Category): Field[] {
-  return [...category.fields]
-    .filter((f) => f.field_type === 'boolean')
-    .sort((a, b) => a.order - b.order);
 }
 
 /** checked-state per category: field_id -> boolean */
@@ -59,10 +49,14 @@ function numberFieldSum(
     }, 0);
 }
 
+/** current/best streak per avoid category; null while loading or on failure. */
+type StreakMap = Record<number, CategoryStreak | null>;
+
 export default function TodayPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [checked, setChecked] = useState<CheckedMap>({});
+  const [streaks, setStreaks] = useState<StreakMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,11 +71,27 @@ export default function TodayPage() {
       setCategories(categoriesData);
       setEntries(entriesData);
       setChecked(buildCheckedMap(categoriesData, entriesData));
+
+      // Streaks are a secondary widget: a failed fetch degrades one card to "—"
+      // instead of blanking the page.
+      const avoid = partitionTodayCategories(categoriesData).avoid;
+      const loaded = await Promise.all(
+        avoid.map(
+          async ({ category }) =>
+            [category.id, await categoriesAPI.getStreak(category.id).catch(() => null)] as const
+        )
+      );
+      setStreaks(Object.fromEntries(loaded));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load today data');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const reloadStreak = useCallback(async (categoryId: number) => {
+    const streak = await categoriesAPI.getStreak(categoryId).catch(() => null);
+    setStreaks((prev) => ({ ...prev, [categoryId]: streak }));
   }, []);
 
   useEffect(() => {
@@ -116,19 +126,16 @@ export default function TodayPage() {
 
   if (loading) return <LoadingSpinner size="lg" />;
 
-  // Legacy data fallback: a checklist category saved before the API started
-  // requiring a boolean field is treated like a form category below.
-  const checklistCategories = categories.filter(
-    (c) => c.display_mode === 'checklist' && booleanFields(c).length > 0
-  );
-  const quickFormCategories = categories
-    .map((category) => ({ category, numberField: firstNumberField(category) }))
-    .filter(
-      (item): item is { category: Category; numberField: Field } =>
-        item.numberField !== undefined &&
-        (item.category.display_mode === 'form' ||
-          booleanFields(item.category).length === 0)
-    );
+  const {
+    avoid: avoidCategories,
+    checklist: checklistCategories,
+    quickForm: quickFormCategories,
+  } = partitionTodayCategories(categories);
+
+  const nothingToTrack =
+    avoidCategories.length === 0 &&
+    checklistCategories.length === 0 &&
+    quickFormCategories.length === 0;
 
   return (
     <div className="space-y-8 animate-fade-rise">
@@ -142,7 +149,7 @@ export default function TodayPage() {
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
 
-      {checklistCategories.length === 0 && quickFormCategories.length === 0 ? (
+      {nothingToTrack ? (
         <div className="text-center py-16 bg-card border border-white/5 rounded-3xl">
           <div className="inline-flex p-4 rounded-3xl bg-surface mb-4">
             <Sun className="w-8 h-8 text-text-disabled" strokeWidth={2} />
@@ -154,6 +161,29 @@ export default function TodayPage() {
         </div>
       ) : (
         <>
+          {avoidCategories.length > 0 && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-[13px] font-medium uppercase tracking-widest text-lime">
+                  Streaks
+                </span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+              <div className="space-y-3">
+                {avoidCategories.map(({ category, numberField }) => (
+                  <AvoidStreakCard
+                    key={category.id}
+                    category={category}
+                    numberField={numberField}
+                    streak={streaks[category.id] ?? null}
+                    onRelapse={reloadStreak}
+                    onError={setError}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {checklistCategories.map((category) => (
             <section key={category.id}>
               <div className="flex items-center gap-3 mb-4">

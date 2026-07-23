@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/27-streak-mode-endpoint
-// summary: pure label helpers for the avoid-streak block (day count, last relapse date)
+// [review:need-review] PHASE-01/27-streak-mode-endpoint, PHASE-01/28-today-avoid-card
+// summary: pure label helpers for the avoid-streak block (day count, clean badge, last relapse date)
 
 const RELAPSE_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   day: 'numeric',
@@ -10,6 +10,11 @@ const RELAPSE_DATE_FORMAT: Intl.DateTimeFormatOptions = {
 /** Streak length with the correct English day form, e.g. "1 day" / "42 days". */
 export function formatDays(days: number): string {
   return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/** Avoid-streak badge text, e.g. "1 day clean" / "42 days clean". */
+export function formatCleanDays(days: number): string {
+  return `${formatDays(days)} clean`;
 }
 
 /**
