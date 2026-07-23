@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/22-category-page-entries-cards
-// summary: reusable entry card (extracted from app/entries/page.tsx) with inline edit/delete + shared FieldValueInput
+// [review:need-review] PHASE-01/34-duration-field-type
+// summary: reusable entry card + shared FieldValueInput; added DurationInput (h:mm <-> seconds)
 
 import { useState } from 'react';
 import { Pencil, X } from 'lucide-react';
@@ -11,6 +11,11 @@ import {
   Field,
   entriesAPI,
 } from '@/lib/api';
+import {
+  formatSecondsToHM,
+  parseDurationToSeconds,
+  secondsToInputValue,
+} from '@/lib/duration';
 
 const DEFAULT_CATEGORY_COLOR = '#B8FF36';
 
@@ -52,6 +57,15 @@ export function FieldValueInput({ field, value, onChange }: FieldValueInputProps
       />
     );
   }
+  if (field.field_type === 'duration') {
+    return (
+      <DurationInput
+        value={value}
+        required={field.is_required}
+        onChange={onChange}
+      />
+    );
+  }
   const inputType =
     field.field_type === 'number'
       ? 'number'
@@ -69,6 +83,56 @@ export function FieldValueInput({ field, value, onChange }: FieldValueInputProps
       step={field.field_type === 'number' ? 'any' : undefined}
       className={entryInputClass}
     />
+  );
+}
+
+interface DurationInputProps {
+  value: string;
+  required?: boolean;
+  onChange: (value: string) => void;
+}
+
+/**
+ * Duration editor. The stored value is whole seconds (EAV text), but the user
+ * types "H:MM" (or bare minutes). Keeps a local text buffer so partial typing
+ * is not clobbered; only propagates a value once it parses, and shows a live
+ * "1h 20m" hint. Empty input clears the stored value.
+ */
+function DurationInput({ value, required, onChange }: DurationInputProps) {
+  const [text, setText] = useState(() =>
+    value === '' ? '' : secondsToInputValue(Number(value))
+  );
+
+  const handleChange = (next: string) => {
+    setText(next);
+    if (next.trim() === '') {
+      onChange('');
+      return;
+    }
+    const seconds = parseDurationToSeconds(next);
+    if (seconds !== null) onChange(String(seconds));
+  };
+
+  const seconds = parseDurationToSeconds(text);
+
+  return (
+    <div>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={text}
+        onChange={(e) => handleChange(e.target.value)}
+        required={required}
+        placeholder="ч:мм (напр. 1:20)"
+        aria-label="Duration (hours:minutes)"
+        className={entryInputClass}
+      />
+      {seconds !== null && seconds > 0 && (
+        <span className="mt-1 block text-xs text-text-disabled">
+          {formatSecondsToHM(seconds)}
+        </span>
+      )}
+    </div>
   );
 }
 

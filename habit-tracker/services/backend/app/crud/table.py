@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/27-streak-mode-endpoint
-# summary: table view aggregation; EAV value parsing moved to app/crud/values.py
+# [review:need-review] PHASE-01/34-duration-field-type
+# summary: table view aggregation; DURATION sums like NUMBER (elapsed seconds)
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import cast
@@ -30,7 +30,9 @@ class _CellAccumulator:
         self.entry_ids.add(entry_id)
         if value is None:
             return
-        if self.field_type == FieldType.NUMBER:
+        # DURATION is elapsed seconds — numerically it aggregates exactly like
+        # NUMBER (sum over the day); only the client formats it as h/m.
+        if self.field_type in (FieldType.NUMBER, FieldType.DURATION):
             number = parse_number(value, field_id=field_id, entry_id=entry_id)
             if number is not None:
                 self.number_sum += number
@@ -41,7 +43,7 @@ class _CellAccumulator:
             self.last_value = value  # rows arrive ordered by created_at, id
 
     def aggregated_value(self) -> str | None:
-        if self.field_type == FieldType.NUMBER:
+        if self.field_type in (FieldType.NUMBER, FieldType.DURATION):
             if not self.has_number:
                 return None
             if self.number_sum.is_integer():

@@ -464,6 +464,7 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
                       <option value="text">Text</option>
                       <option value="number">Number</option>
                       <option value="boolean">Boolean</option>
+                      <option value="duration">Duration (time spent)</option>
                       <option value="date">Date</option>
                       <option value="datetime">DateTime</option>
                       <option value="time">Time</option>
