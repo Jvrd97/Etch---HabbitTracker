@@ -207,6 +207,45 @@ struct TableResponseDTO: Codable, Equatable {
     let days: [TableDayDTO]
 }
 
+/// Journal entry as returned by `GET /api/v1/journal` (inside `JournalListResponseDTO.items`).
+/// `tags` is the backend's comma-separated string; `entryDate` is `YYYY-MM-DD`.
+struct JournalEntryDTO: Codable, Identifiable, Equatable {
+    let id: Int
+    let title: String?
+    let content: String
+    let entryDate: String
+    let mood: String?
+    let tags: String?
+    let createdAt: String
+    let updatedAt: String
+}
+
+/// Response of `GET /api/v1/journal` — total count plus the page of entries.
+struct JournalListResponseDTO: Codable, Equatable {
+    let total: Int
+    let items: [JournalEntryDTO]
+}
+
+/// Payload for `POST /api/v1/journal`. `content` is required by the backend;
+/// optional fields are omitted (nil) when the user leaves them blank.
+struct JournalEntryCreateDTO: Codable, Equatable {
+    let title: String?
+    let content: String
+    let entryDate: String
+    let mood: String?
+    let tags: String?
+}
+
+/// Payload for `PATCH /api/v1/journal/{id}`. Every property is optional so the
+/// backend patches only what changed.
+struct JournalEntryUpdateDTO: Codable, Equatable {
+    let title: String?
+    let content: String?
+    let entryDate: String?
+    let mood: String?
+    let tags: String?
+}
+
 enum APIJSONCoding {
     /// Decoder matching the backend's snake_case JSON.
     static func makeDecoder() -> JSONDecoder {

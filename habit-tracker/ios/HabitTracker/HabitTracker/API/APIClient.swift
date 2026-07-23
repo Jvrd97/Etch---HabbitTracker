@@ -33,6 +33,14 @@ protocol EntriesAPI {
     func deleteEntry(id: Int) async throws
 }
 
+/// API surface needed by the Journal screen; `APIClient` is the production implementation.
+protocol JournalAPI {
+    func fetchJournalEntries() async throws -> [JournalEntryDTO]
+    func createJournalEntry(_ payload: JournalEntryCreateDTO) async throws -> JournalEntryDTO
+    func updateJournalEntry(id: Int, _ payload: JournalEntryUpdateDTO) async throws -> JournalEntryDTO
+    func deleteJournalEntry(id: Int) async throws
+}
+
 /// Errors surfaced by `APIClient`, suitable for user-facing mapping.
 enum APIClientError: Error, Equatable {
     case invalidBaseURL
@@ -113,7 +121,7 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI {
+extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI {
     static let apiV1Path = "/api/v1"
 
     func fetchCategories() async throws -> [CategoryDTO] {
@@ -191,6 +199,26 @@ extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI {
                 URLQueryItem(name: "end_date", value: date),
             ]
         )
+    }
+
+    func fetchJournalEntries() async throws -> [JournalEntryDTO] {
+        let response: JournalListResponseDTO = try await getJSON(path: "/journal", query: [])
+        return response.items
+    }
+
+    func createJournalEntry(_ payload: JournalEntryCreateDTO) async throws -> JournalEntryDTO {
+        try await sendJSON(path: "/journal", method: "POST", body: payload)
+    }
+
+    func updateJournalEntry(
+        id: Int, _ payload: JournalEntryUpdateDTO
+    ) async throws -> JournalEntryDTO {
+        try await sendJSON(path: "/journal/\(id)", method: "PATCH", body: payload)
+    }
+
+    func deleteJournalEntry(id: Int) async throws {
+        let url = try makeAPIURL(path: "/journal/\(id)", query: [])
+        _ = try await send(makeRequest(url: url, method: "DELETE"))
     }
 
     private func sendJSON<Body: Encodable, Response: Decodable>(

@@ -1,5 +1,18 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/09-ios-journal
+
+Экран Journal: дневник «как прошёл день» с телефона. `JournalViewModel` грузит ленту (`GET /api/v1/journal`, распаковывает `items` из `JournalListResponseDTO`) и сортирует от новых к старым (по дате, затем по id). Черновик записи живёт в published-полях (`draftTitle`/`draftContent`/`draftDate`/`draftMood`/`draftTags`); `createEntry` требует непустой `content` (иначе ошибка без похода в сеть), опускает пустые title/tags/mood, нормализует теги и шлёт `POST /journal`, вставляя результат в начало ленты; при сетевой ошибке черновик НЕ сбрасывается. Удаление — `DELETE /journal/{id}` с обновлением ленты. Ядро парсинга тегов вынесено в чистый `JournalTags` (`parse`/`normalize`): строка «работа, достижения ,, проект » → `работа,достижения,проект`, пустой ввод → nil. `JournalMood` — enum опций настроения с эмодзи-лейблами, raw-value совпадают со строками бэкенда. UI: лента (дата, настроение, заголовок, превью текста на 3 строки, теги-чипы), compose-шит (title, дата, пикер настроения, многострочный текст, теги через запятую), свайп-удаление с `confirmationDialog`. Новый таб Journal в `TabView`. Приёмка: запись «как прошёл день» с настроением создаётся с телефона (`POST /journal`) и видна в веб-админке. 11 новых unit-тестов (73 всего) зелёные на iPhone 17.
+
+Файлов тронуто: 6 (3 new, 3 mod).
+
+- `HabitTracker/Features/Journal/JournalViewModel.swift` — new, load ленты + compose-черновик + create с нормализацией тегов + delete, `JournalTags`/`JournalMood`, apiProvider из Settings.
+- `HabitTracker/Features/Journal/JournalView.swift` — new, лента записей + compose-шит (пикер настроения, теги) + свайп-удаление с confirmationDialog.
+- `HabitTrackerTests/JournalViewModelTests.swift` — new, 11 тестов (парсинг/нормализация тегов, load happy+failure, create с настроением+тегами / пропуск пустых полей / пустой content / ошибка сохраняет драфт, delete happy+failure).
+- `HabitTracker/API/DTOs.swift` — mod, `JournalEntryDTO`/`JournalListResponseDTO`/`JournalEntryCreateDTO`/`JournalEntryUpdateDTO`.
+- `HabitTracker/API/APIClient.swift` — mod, протокол `JournalAPI` + реализация (`fetchJournalEntries`/`createJournalEntry`/`updateJournalEntry`/`deleteJournalEntry`).
+- `HabitTracker/App/HabitTrackerApp.swift` — mod, таб Journal в TabView.
+
 ## 2026-07-23 — PHASE-01/08-ios-entries-crud
 
 Экран History: история записей списком по датам с правкой и удалением целиком с телефона. `EntriesViewModel` грузит категории (для имён полей/фильтра) и всю историю записей (`GET /api/v1/entries`) одним проходом; список фильтруется по категории (`selectedCategoryId`, `filteredEntries`) и группируется по дню от новых к старым (`groupedByDate`). Правка живёт в `editDraft` (значения полей keyed by field id + заметка): `beginEditing` сеет драфт из записи, `saveEdit` шлёт `PATCH /entries/{id}` и заменяет строку в списке; ключевое свойство — при сетевой ошибке драфт НЕ сбрасывается, поэтому введённые значения не теряются (покрыто тестом). Удаление — `DELETE /entries/{id}` с обновлением списка и `confirmationDialog` в UI. UI: секционный список по датам, меню-фильтр по категориям в тулбаре, свайп-удаление с подтверждением, форма правки (поле на каждый field категории + notes). Новый таб History в `TabView`. Приёмка: опечатка «422 отжимания» правится на «42» за пару тапов (тап по записи → правка значения → Save). 10 новых unit-тестов (62 всего) зелёные на iPhone 17.

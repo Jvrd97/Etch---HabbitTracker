@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/08-ios-entries-crud
-// summary: app entry point — TabView with Today, Table, History, Categories and Settings tabs
+// [review:need-review] PHASE-01/09-ios-journal
+// summary: app entry point — TabView with Today, Table, History, Journal, Categories and Settings tabs
 import SwiftUI
 
 @main
@@ -18,6 +18,10 @@ struct HabitTrackerApp: App {
                 EntriesView(viewModel: .live())
                     .tabItem {
                         Label("History", systemImage: "clock.arrow.circlepath")
+                    }
+                JournalView(viewModel: .live())
+                    .tabItem {
+                        Label("Journal", systemImage: "book")
                     }
                 CategoriesView(viewModel: .live())
                     .tabItem {
