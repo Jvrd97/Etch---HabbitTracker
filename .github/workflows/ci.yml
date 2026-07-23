@@ -64,5 +64,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Deploy to production
         run: |
-
+          cd habit-tracker
+          git pull origin main
           make up
