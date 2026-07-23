@@ -236,7 +236,7 @@ final class EntriesViewModelTests: XCTestCase {
 
         let viewModel = EntriesViewModel(api: api)
         await viewModel.load()
-        let ok = await viewModel.deleteEntry(id: 100)
+        let ok = await viewModel.deleteEditEntry(id: 100)
 
         XCTAssertTrue(ok)
         XCTAssertEqual(api.deletedIDs, [100])
@@ -253,7 +253,7 @@ final class EntriesViewModelTests: XCTestCase {
 
         let viewModel = EntriesViewModel(api: api)
         await viewModel.load()
-        let ok = await viewModel.deleteEntry(id: 100)
+        let ok = await viewModel.deleteEditEntry(id: 100)
 
         XCTAssertFalse(ok)
         XCTAssertEqual(viewModel.entries.map(\.id), [100])

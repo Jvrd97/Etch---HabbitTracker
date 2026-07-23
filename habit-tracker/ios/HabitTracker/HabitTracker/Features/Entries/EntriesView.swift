@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
-// summary: Entries history screen — Lime Tech dark restyle: card rows, neon loader, DS error/empty states; date-sectioned list, filter menu, edit form
+// [review:need-review] PHASE-01/35-ios-category-detail
+// summary: Entries history screen — date-sectioned list, filter menu; edit form now the shared generic EntryEditView, summary line from shared EntrySummary
 import SwiftUI
 
 struct EntriesView: View {
@@ -23,7 +23,10 @@ struct EntriesView: View {
         }
         .task { await viewModel.load() }
         .sheet(item: editingBinding) { draft in
-            EntryEditView(viewModel: viewModel, initialDraft: draft)
+            EntryEditView(
+                viewModel: viewModel,
+                fields: viewModel.categories.first { $0.id == draft.categoryId }?.fields ?? []
+            )
         }
         .confirmationDialog(
             "Delete this entry?",
@@ -32,7 +35,7 @@ struct EntriesView: View {
             presenting: pendingDeletion
         ) { entry in
             Button("Delete", role: .destructive) {
-                Task { await viewModel.deleteEntry(id: entry.id) }
+                Task { await viewModel.deleteEditEntry(id: entry.id) }
             }
             Button("Cancel", role: .cancel) {}
         } message: { _ in
@@ -135,104 +138,5 @@ struct EntriesView: View {
                 Label("Delete", systemImage: "trash")
             }
         }
-    }
-}
-
-/// Builds a human-readable "field: value" summary of an entry's values, using the
-/// category's field names when known. Kept separate so it is easy to reason about.
-enum EntrySummary {
-    static func line(for entry: EntryDTO, category: CategoryDTO?) -> String {
-        let names = Dictionary(
-            uniqueKeysWithValues: (category?.fields ?? []).map { ($0.id, $0.name) }
-        )
-        let parts = entry.values.compactMap { value -> String? in
-            guard let raw = value.value, !raw.isEmpty else { return nil }
-            let label = names[value.fieldId] ?? "Field \(value.fieldId)"
-            return "\(label): \(raw)"
-        }
-        if parts.isEmpty {
-            return entry.notes ?? "—"
-        }
-        return parts.joined(separator: ", ")
-    }
-}
-
-/// Edit form for a single entry: one text field per category field plus a notes box.
-/// The draft lives in the view model, so a failed save keeps the typed values.
-struct EntryEditView: View {
-    @ObservedObject var viewModel: EntriesViewModel
-    @State private var isSaving = false
-
-    private let categoryID: Int
-
-    init(viewModel: EntriesViewModel, initialDraft: EntryEditDraft) {
-        self.viewModel = viewModel
-        self.categoryID = initialDraft.categoryId
-    }
-
-    private var category: CategoryDTO? {
-        viewModel.categories.first { $0.id == categoryID }
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                if let fields = category?.fields, !fields.isEmpty {
-                    Section("Values") {
-                        ForEach(fields.sorted { $0.order < $1.order }) { field in
-                            LabeledContent(field.name) {
-                                TextField("Value", text: valueBinding(fieldID: field.id))
-                                    .multilineTextAlignment(.trailing)
-                                    .keyboardType(field.fieldType == .number ? .decimalPad : .default)
-                            }
-                        }
-                    }
-                    .listRowBackground(DS.Palette.card)
-                }
-                Section("Notes") {
-                    TextField("Notes", text: notesBinding, axis: .vertical)
-                        .lineLimit(1...4)
-                }
-                .listRowBackground(DS.Palette.card)
-                if let message = viewModel.saveErrorMessage {
-                    Section {
-                        Text(message).foregroundStyle(DS.Palette.danger)
-                    }
-                    .listRowBackground(DS.Palette.card)
-                }
-            }
-            .dsScreenBackground()
-            .navigationTitle("Edit Entry")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { viewModel.cancelEditing() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(isSaving)
-                }
-            }
-        }
-    }
-
-    private func valueBinding(fieldID: Int) -> Binding<String> {
-        Binding(
-            get: { viewModel.editDraft?.values[fieldID] ?? "" },
-            set: { viewModel.editDraft?.values[fieldID] = $0 }
-        )
-    }
-
-    private var notesBinding: Binding<String> {
-        Binding(
-            get: { viewModel.editDraft?.notes ?? "" },
-            set: { viewModel.editDraft?.notes = $0 }
-        )
-    }
-
-    private func save() async {
-        isSaving = true
-        defer { isSaving = false }
-        _ = await viewModel.saveEdit()
     }
 }

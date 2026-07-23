@@ -1,5 +1,38 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/35-ios-category-detail (round 2, правки по ревью)
+
+Ответ на замечание round 1 о дублировании между `CategoryDetailViewModel`/`CategoryEntryEditView` и `EntriesViewModel`/`EntryEditView`.
+
+- **Общий entry-mutation surface вынесен в `HabitTracker/Shared/EntryMutation.swift`.** Модели `EntryEditDraft`, `EntryLoadState`, `EntryDayGroup` промоутнуты из файлов Entries-фичи в общую локацию. Протокол `EntryMutating` (+ protocol extension) даёт обеим VM единожды: `groupedByDate`, `beginEditing`/`cancelEditing`/`saveEdit`/`deleteEditEntry`/`requireAPI` и `notConfiguredMessage`. Фильтр Entries сохранён через требование `groupableEntries` (дефолт — `entries`, у `EntriesViewModel` — `filteredEntries`). Фабрика live-`APIClient` (парсинг base URL + Keychain + 401-fallback) вынесена в `EntryMutationLive.makeAPIClient()`, оба `live()` теперь тонкие обёртки. `deleteEntry(id:)` переименован в `deleteEditEntry(id:)` (VM-метод больше не совпадает по имени с API-методом); вызовы в обоих View и тестах обновлены.
+- **Вью-дубликат устранён.** `CategoryEntryEditView` удалён; `EntryEditView` обобщён в `EntryEditView<Model: EntryMutating>` (в `HabitTracker/Shared/EntryEditView.swift`) и переиспользуется обоими экранами — поля формы приходят параметром `fields` от вызывающего (Entries резолвит из `categories`, detail — из `category.fields`), так форма развязана с раскладкой хранения категорий. `EntrySummary` промоутнут туда же (Components).
+- **`CategoryDetailAPI` свёрнут в общий контракт.** Введён базовый `EntryMutationAPI` (fetchEntries/updateEntry/deleteEntry); `EntriesAPI` рефайнит его добавляя `fetchCategories`, `CategoryDetailAPI` — добавляя `createEntry`. Пятой параллельной копии сигнатур больше нет; `APIClient` уже реализует всё.
+- **Паритет шапки экрана с web #22/#29 — осознанный скоуп-каст, не пропуск.** `CategoryDetailView` показывает цвет/имя/кол-во полей категории; группа и стрик из веб-шапки опущены сознательно: их нет в `CategoryDTO` (бэкенд их в этот DTO не отдаёт), тянуть их — отдельный слайс схемы/API вне тикета 35. Стрик-карточки идут отдельным тикетом (#38). Зафиксировано и в теле тикета.
+
+Файлов тронуто в round 2: 9 (2 new, 7 mod). Вся сьюта (90 тестов) зелёная на iPhone 17 (iOS 26.3); поведение VM без изменений — те же тесты, что и в round 1.
+
+- `HabitTracker/Shared/EntryMutation.swift` — new, модели + `EntryMutating` protocol/extension + `EntryMutationLive`.
+- `HabitTracker/Shared/EntryEditView.swift` — new, generic `EntryEditView` + `EntrySummary`.
+- `HabitTracker/API/APIClient.swift` — mod, базовый `EntryMutationAPI`, рефайны `EntriesAPI`/`CategoryDetailAPI`.
+- `HabitTracker/Features/Entries/EntriesViewModel.swift` — mod, конформит `EntryMutating`, оставлен только фильтр + load + live-обёртка.
+- `HabitTracker/Features/Entries/EntriesView.swift` — mod, локальные `EntryEditView`/`EntrySummary` удалены, шит зовёт общий `EntryEditView`.
+- `HabitTracker/Features/Categories/CategoryDetailViewModel.swift` — mod, конформит `EntryMutating`, оставлены quickAdd + форматирование дат + серверный скоуп по категории.
+- `HabitTracker/Features/Categories/CategoryDetailView.swift` — mod, `CategoryEntryEditView` удалён, шит зовёт общий `EntryEditView`.
+- `HabitTrackerTests/EntriesViewModelTests.swift` — mod, `deleteEntry` → `deleteEditEntry` в вызовах VM.
+- `HabitTrackerTests/CategoryDetailViewModelTests.swift` — mod, `deleteEntry` → `deleteEditEntry` в вызовах VM.
+
+## 2026-07-23 — PHASE-01/35-ios-category-detail
+
+Экран одной категории: тап по карточке в списке Categories открывает детальный экран с историей значений, быстрым добавлением и правкой/удалением записей (паритет с web #22/#29). Новый `CategoryDetailViewModel` переиспользует логику `EntriesViewModel` (группировка по датам desc, `EntryEditDraft`, PATCH/DELETE с in-place обновлением списка), но скоупится на одну категорию: `load()` тянет `GET /entries?category_id=<id>` (серверная фильтрация), `quickAdd()` пишет значение первого поля категории (по `order`) сегодняшней датой через generic `POST /entries` и вставляет запись в начало списка без перезагрузки. Пустое значение — no-op; сетевая ошибка сохраняет ввод и показывает сообщение. Дата инъектируется (`now`/`timeZone`) как в `TodayViewModel`. Введён протокол `CategoryDetailAPI` (fetchEntries/createEntry/updateEntry/deleteEntry), `APIClient` уже реализует все методы — добавлено только соответствие. Навигация: строки списка Categories переведены с `Button`(edit) на `NavigationLink` → детальный экран; редактирование категории переехало на leading-swipe, удаление осталось на trailing-swipe. Out of scope (по тикету): графики (#36), avoid-стрик карточки (#38); группа/стрик в шапке опущены — их нет в `CategoryDTO`. 10 новых unit-тестов (90 всего) зелёные на iPhone 17.
+
+Файлов тронуто: 5 (3 new, 2 mod).
+
+- `HabitTracker/Features/Categories/CategoryDetailViewModel.swift` — new, VM детального экрана.
+- `HabitTracker/Features/Categories/CategoryDetailView.swift` — new, SwiftUI экран + `CategoryEntryEditView`.
+- `HabitTrackerTests/CategoryDetailViewModelTests.swift` — new, 10 unit-тестов (+`MockCategoryDetailAPI`).
+- `HabitTracker/API/APIClient.swift` — mod, протокол `CategoryDetailAPI` + соответствие в extension.
+- `HabitTracker/Features/Categories/CategoriesView.swift` — mod, `NavigationLink` на детальный экран, edit на leading-swipe; маркер обновлён на ticket 35.
+
 ## 2026-07-23 — PHASE-01/32-ios-lime-tech-design-pass (round 2, правки по ревью)
 
 Ответ на замечания ревью первого раунда:

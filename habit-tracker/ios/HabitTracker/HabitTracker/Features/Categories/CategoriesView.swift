@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
-// summary: Categories screen — Lime Tech dark restyle: card rows, neon loader, DS error/empty states; create/edit form + delete confirmation
+// [review:need-review] PHASE-01/35-ios-category-detail
+// summary: Categories screen — card rows navigate to category detail; leading-swipe edit, trailing-swipe delete; create/edit form + delete confirmation
 import SwiftUI
 
 struct CategoriesView: View {
@@ -82,8 +82,8 @@ struct CategoriesView: View {
             )
         } else {
             List(viewModel.categories) { category in
-                Button {
-                    editingCategory = category
+                NavigationLink {
+                    CategoryDetailView(viewModel: .live(category: category))
                 } label: {
                     HStack(spacing: DS.Spacing.md) {
                         ColorSwatch(hex: category.color)
@@ -97,6 +97,14 @@ struct CategoriesView: View {
                     }
                 }
                 .listRowBackground(DS.Palette.card)
+                .swipeActions(edge: .leading) {
+                    Button {
+                        editingCategory = category
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .tint(DS.Palette.info)
+                }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         pendingDeletion = category

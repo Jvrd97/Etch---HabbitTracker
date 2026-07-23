@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/08-ios-entries-crud
-// summary: URLSession async/await HTTP client; /api/v1 JSON (Today/Table + category & field CRUD + entries history PATCH/DELETE)
+// [review:need-review] PHASE-01/35-ios-category-detail
+// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI now refine a shared EntryMutationAPI base (list/patch/delete)
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -25,12 +25,26 @@ protocol CategoriesAPI {
     func addField(categoryID: Int, _ payload: FieldCreateDTO) async throws -> FieldDTO
 }
 
-/// API surface needed by the Entries history screen; `APIClient` is the production implementation.
-protocol EntriesAPI {
-    func fetchCategories() async throws -> [CategoryDTO]
+/// Entry-mutation endpoints shared by every entry-history view model: list one
+/// (or all) category's entries, PATCH an entry, DELETE an entry. The single source
+/// of these signatures — screen-specific protocols refine it rather than re-declaring.
+protocol EntryMutationAPI {
     func fetchEntries(categoryId: Int?) async throws -> [EntryDTO]
     func updateEntry(id: Int, _ payload: EntryUpdateDTO) async throws -> EntryDTO
     func deleteEntry(id: Int) async throws
+}
+
+/// API surface needed by the Entries history screen; `APIClient` is the production
+/// implementation. Adds all-category listing on top of the shared mutation surface.
+protocol EntriesAPI: EntryMutationAPI {
+    func fetchCategories() async throws -> [CategoryDTO]
+}
+
+/// API surface needed by the single-category detail screen; `APIClient` is the production
+/// implementation. Adds generic entry creation (quick-add) on top of the shared
+/// mutation surface used for listing, editing, and deleting.
+protocol CategoryDetailAPI: EntryMutationAPI {
+    func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO
 }
 
 /// API surface needed by the Dashboard screen; `APIClient` is the production implementation.
@@ -130,7 +144,7 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, DashboardAPI {
+extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, DashboardAPI, CategoryDetailAPI {
     static let apiV1Path = "/api/v1"
 
     func fetchCategories() async throws -> [CategoryDTO] {
