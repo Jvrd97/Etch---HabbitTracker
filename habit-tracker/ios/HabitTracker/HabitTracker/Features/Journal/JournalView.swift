@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/09-ios-journal
-// summary: Journal screen — feed of entries (date, mood, tags, preview), compose sheet with title/text/mood picker/tags, swipe-delete
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Journal screen — Lime Tech dark restyle: card feed rows, lime tags, neon loader, DS error/empty states; compose sheet + swipe-delete
 import SwiftUI
 
 struct JournalView: View {
@@ -14,6 +14,7 @@ struct JournalView: View {
         NavigationStack {
             content
                 .navigationTitle("Journal")
+                .dsScreenBackground()
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
@@ -55,19 +56,11 @@ struct JournalView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NeonLoader(label: "Loading")
         case .failure(let message):
-            VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text(message).multilineTextAlignment(.center)
-                Button("Retry") { Task { await viewModel.load() } }
-                    .buttonStyle(.borderedProminent)
+            DSErrorState(message: message) {
+                Task { await viewModel.load() }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
             feed
         }
@@ -76,15 +69,17 @@ struct JournalView: View {
     @ViewBuilder
     private var feed: some View {
         if viewModel.entries.isEmpty {
-            ContentUnavailableView(
-                "No entries yet",
+            DSEmptyState(
+                title: "No entries yet",
                 systemImage: "book.closed",
-                description: Text("Tap the compose button to write about your day.")
+                message: "Tap the compose button to write about your day.",
+                action: (label: "New entry", run: { viewModel.beginComposing() })
             )
         } else {
             List {
                 ForEach(viewModel.entries) { entry in
                     JournalRow(entry: entry)
+                        .listRowBackground(DS.Palette.card)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 pendingDeletion = entry
@@ -104,36 +99,39 @@ struct JournalRow: View {
     let entry: JournalEntryDTO
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack {
                 Text(entry.entryDate)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Palette.textSecondary)
                 Spacer()
                 if let mood = entry.mood, let label = JournalMood(rawValue: mood)?.label {
                     Text(label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Palette.textSecondary)
                 }
             }
             if let title = entry.title, !title.isEmpty {
-                Text(title).font(.headline)
+                Text(title)
+                    .font(DS.Typography.card)
+                    .foregroundStyle(DS.Palette.textPrimary)
             }
             Text(entry.content)
-                .font(.body)
+                .font(DS.Typography.body)
+                .foregroundStyle(DS.Palette.textPrimary)
                 .lineLimit(3)
             let tags = JournalTags.parse(entry.tags ?? "")
             if !tags.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: DS.Spacing.sm) {
                     ForEach(tags, id: \.self) { tag in
                         Text("#\(tag)")
-                            .font(.caption2)
-                            .foregroundStyle(.tint)
+                            .font(DS.Typography.caption)
+                            .foregroundStyle(DS.Palette.lime)
                     }
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, DS.Spacing.xs)
     }
 }
 
@@ -150,6 +148,7 @@ struct JournalComposeView: View {
                     TextField("Date (YYYY-MM-DD)", text: $viewModel.draftDate)
                         .keyboardType(.numbersAndPunctuation)
                 }
+                .listRowBackground(DS.Palette.card)
                 Section("Mood") {
                     Picker("Mood", selection: $viewModel.draftMood) {
                         Text("None").tag(String?.none)
@@ -158,20 +157,25 @@ struct JournalComposeView: View {
                         }
                     }
                 }
+                .listRowBackground(DS.Palette.card)
                 Section("How was your day?") {
                     TextField("Write about your day…", text: $viewModel.draftContent, axis: .vertical)
                         .lineLimit(4...12)
                 }
+                .listRowBackground(DS.Palette.card)
                 Section("Tags") {
                     TextField("comma, separated, tags", text: $viewModel.draftTags)
                         .autocorrectionDisabled()
                 }
+                .listRowBackground(DS.Palette.card)
                 if let message = viewModel.saveErrorMessage {
                     Section {
-                        Text(message).foregroundStyle(.red)
+                        Text(message).foregroundStyle(DS.Palette.danger)
                     }
+                    .listRowBackground(DS.Palette.card)
                 }
             }
+            .dsScreenBackground()
             .navigationTitle("New Entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

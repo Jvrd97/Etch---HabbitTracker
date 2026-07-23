@@ -1,6 +1,7 @@
-// [review:need-review] PHASE-01/10-ios-dashboard
-// summary: app entry point — TabView (Dashboard start tab) with programmatic tab switching for quick jumps
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: app entry point — TabView (Dashboard start tab) with programmatic tab switching; Lime Tech dark theme + lime accent applied app-wide
 import SwiftUI
+import UIKit
 
 /// Tabs of the root `TabView`. Tags let the Dashboard jump to another tab programmatically.
 enum AppTab: Hashable {
@@ -16,6 +17,10 @@ enum AppTab: Hashable {
 @main
 struct HabitTrackerApp: App {
     @State private var selectedTab: AppTab = .dashboard
+
+    init() {
+        Self.configureAppearance()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -56,6 +61,40 @@ struct HabitTrackerApp: App {
                     }
                     .tag(AppTab.settings)
             }
+            .tint(DS.Palette.lime)
+            .preferredColorScheme(.dark)
         }
+    }
+
+    /// Paints the tab bar and navigation bars in the near-black Lime Tech surfaces,
+    /// with lime tint on the active tab. UIKit appearance is the only place SwiftUI
+    /// still defers to the system chrome, so the tokens are mirrored here once.
+    private static func configureAppearance() {
+        let background = UIColor(DS.Palette.background)
+        let lime = UIColor(DS.Palette.lime)
+        let secondary = UIColor(DS.Palette.textSecondary)
+
+        let tab = UITabBarAppearance()
+        tab.configureWithOpaqueBackground()
+        tab.backgroundColor = background
+        for item in [tab.stackedLayoutAppearance, tab.inlineLayoutAppearance, tab.compactInlineLayoutAppearance] {
+            item.selected.iconColor = lime
+            item.selected.titleTextAttributes = [.foregroundColor: lime]
+            item.normal.iconColor = secondary
+            item.normal.titleTextAttributes = [.foregroundColor: secondary]
+        }
+        UITabBar.appearance().standardAppearance = tab
+        UITabBar.appearance().scrollEdgeAppearance = tab
+
+        let nav = UINavigationBarAppearance()
+        nav.configureWithOpaqueBackground()
+        nav.backgroundColor = background
+        nav.shadowColor = .clear
+        nav.titleTextAttributes = [.foregroundColor: UIColor.white]
+        nav.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        UINavigationBar.appearance().standardAppearance = nav
+        UINavigationBar.appearance().scrollEdgeAppearance = nav
+        UINavigationBar.appearance().compactAppearance = nav
+        UINavigationBar.appearance().tintColor = lime
     }
 }

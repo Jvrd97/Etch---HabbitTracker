@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/10-ios-dashboard
-// summary: Dashboard screen — counter cards + recent-activity feed + quick jumps to Today/Journal
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Dashboard screen — Lime Tech dark restyle: KPI cards, recent-activity feed, lime quick-actions
 import SwiftUI
 
 struct DashboardView: View {
@@ -17,6 +17,7 @@ struct DashboardView: View {
         NavigationStack {
             content
                 .navigationTitle("Dashboard")
+                .dsScreenBackground()
         }
         .task {
             await viewModel.load()
@@ -27,96 +28,112 @@ struct DashboardView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NeonLoader(label: "Loading")
         case .failure(let message):
-            VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text(message)
-                    .multilineTextAlignment(.center)
-                Button("Retry") {
-                    Task { await viewModel.load() }
-                }
-                .buttonStyle(.borderedProminent)
+            DSErrorState(message: message) {
+                Task { await viewModel.load() }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
             dashboard
         }
     }
 
     private var dashboard: some View {
-        List {
-            Section("Overview") {
-                counterRow(
-                    label: "Categories",
-                    value: viewModel.stats.categoriesCount,
-                    systemImage: "folder"
-                )
-                counterRow(
-                    label: "Entries",
-                    value: viewModel.stats.entriesCount,
-                    systemImage: "calendar"
-                )
-                counterRow(
-                    label: "Journal",
-                    value: viewModel.stats.journalCount,
-                    systemImage: "book"
-                )
+        ScrollView {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
+                kpiRow
+                sectionHeader("Recent activity")
+                recentActivity
+                sectionHeader("Quick actions")
+                quickActions
             }
-
-            Section("Recent activity") {
-                if viewModel.stats.recentEntries.isEmpty {
-                    Text("Nothing here yet")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(viewModel.stats.recentEntries) { entry in
-                        HStack {
-                            Image(systemName: "calendar")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Entry #\(entry.id)")
-                                Text(entry.entryDate)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text("\(entry.values.count) values")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-
-            Section("Quick actions") {
-                Button {
-                    onNavigate(.today)
-                } label: {
-                    Label("Open Today", systemImage: "checkmark.circle")
-                }
-                Button {
-                    onNavigate(.journal)
-                } label: {
-                    Label("Open Journal", systemImage: "book")
-                }
-            }
+            .padding(DS.Spacing.lg)
         }
         .refreshable {
             await viewModel.load()
         }
     }
 
-    private func counterRow(label: String, value: Int, systemImage: String) -> some View {
-        HStack {
-            Label(label, systemImage: systemImage)
-            Spacer()
-            Text("\(value)")
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
+    private var kpiRow: some View {
+        HStack(spacing: DS.Spacing.md) {
+            kpiCard(label: "Categories", value: viewModel.stats.categoriesCount)
+            kpiCard(label: "Entries", value: viewModel.stats.entriesCount)
+            kpiCard(label: "Journal", value: viewModel.stats.journalCount)
         }
+    }
+
+    private func kpiCard(label: String, value: Int) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text("\(value)")
+                    .font(DS.Typography.h1)
+                    .foregroundStyle(DS.Palette.textPrimary)
+                    .monospacedDigit()
+                Text(label)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Palette.textSecondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentActivity: some View {
+        if viewModel.stats.recentEntries.isEmpty {
+            Card {
+                Text("Nothing here yet")
+                    .font(DS.Typography.body)
+                    .foregroundStyle(DS.Palette.textSecondary)
+            }
+        } else {
+            Card {
+                VStack(spacing: 0) {
+                    ForEach(Array(viewModel.stats.recentEntries.enumerated()), id: \.element.id) { index, entry in
+                        if index > 0 {
+                            Divider().overlay(DS.Palette.cardStroke)
+                                .padding(.vertical, DS.Spacing.sm)
+                        }
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundStyle(DS.Palette.lime)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Entry #\(entry.id)")
+                                    .font(DS.Typography.body)
+                                    .foregroundStyle(DS.Palette.textPrimary)
+                                Text(entry.entryDate)
+                                    .font(DS.Typography.caption)
+                                    .foregroundStyle(DS.Palette.textSecondary)
+                            }
+                            Spacer()
+                            Text("\(entry.values.count) values")
+                                .font(DS.Typography.caption)
+                                .foregroundStyle(DS.Palette.textSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var quickActions: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Button {
+                onNavigate(.today)
+            } label: {
+                Label("Today", systemImage: "checkmark.circle")
+            }
+            .buttonStyle(LimeButtonStyle(prominent: false))
+            Button {
+                onNavigate(.journal)
+            } label: {
+                Label("Journal", systemImage: "book")
+            }
+            .buttonStyle(LimeButtonStyle(prominent: false))
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(DS.Typography.section)
+            .foregroundStyle(DS.Palette.textPrimary)
     }
 }

@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/03-ios-scaffold-settings
-// summary: Settings screen — server address + API key fields, connection check button with status indicator
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Settings screen — Lime Tech dark restyle: card form rows, neon status indicator, lime accents; server address + API key + connection check
 import SwiftUI
 
 struct SettingsView: View {
@@ -15,12 +15,14 @@ struct SettingsView: View {
                         .autocorrectionDisabled()
                     SecureField("API key", text: $viewModel.apiKey)
                 }
+                .listRowBackground(DS.Palette.card)
                 Section {
                     Button {
                         Task { await viewModel.checkConnection() }
                     } label: {
                         HStack {
                             Text("Check connection")
+                                .foregroundStyle(DS.Palette.lime)
                             Spacer()
                             statusIndicator
                         }
@@ -29,10 +31,13 @@ struct SettingsView: View {
                 } footer: {
                     if case .failure(let message) = viewModel.connectionState {
                         Text(message)
+                            .foregroundStyle(DS.Palette.danger)
                     }
                 }
+                .listRowBackground(DS.Palette.card)
             }
             .navigationTitle("Settings")
+            .dsScreenBackground()
         }
     }
 
@@ -43,12 +48,13 @@ struct SettingsView: View {
             EmptyView()
         case .checking:
             ProgressView()
+                .tint(DS.Palette.lime)
         case .success:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(DS.Palette.success)
         case .failure:
             Image(systemName: "xmark.circle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(DS.Palette.danger)
         }
     }
 }

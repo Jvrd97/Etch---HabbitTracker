@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/06-ios-table-view
-// summary: Table screen — days×habits grid with horizontal column scroll; tap cell opens source-entries sheet
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Table screen — Lime Tech dark restyle: contributions-style grid, lime-tinted filled cells, neon loader
 import SwiftUI
 
 struct TableView: View {
@@ -13,12 +13,14 @@ struct TableView: View {
     private enum Metrics {
         static let dateColumnWidth: CGFloat = 96
         static let valueColumnWidth: CGFloat = 88
+        static let loaderFooterHeight: CGFloat = 64
     }
 
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle("Table")
+                .dsScreenBackground()
         }
         .task {
             if case .idle = viewModel.state {
@@ -34,22 +36,11 @@ struct TableView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NeonLoader(label: "Loading")
         case .failure(let message):
-            VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text(message)
-                    .multilineTextAlignment(.center)
-                Button("Retry") {
-                    Task { await viewModel.load() }
-                }
-                .buttonStyle(.borderedProminent)
+            DSErrorState(message: message) {
+                Task { await viewModel.load() }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
             grid
         }
@@ -78,28 +69,31 @@ struct TableView: View {
     private var headerRow: some View {
         GridRow {
             Text("Day")
-                .font(.caption.bold())
+                .font(DS.Typography.caption)
+                .foregroundStyle(DS.Palette.textSecondary)
                 .frame(width: Metrics.dateColumnWidth, alignment: .leading)
             ForEach(viewModel.grid.columns) { column in
                 Text(column.title)
-                    .font(.caption.bold())
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Palette.textSecondary)
                     .lineLimit(1)
                     .frame(width: Metrics.valueColumnWidth, alignment: .center)
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     private func dataRow(_ row: TableGridRow) -> some View {
         GridRow {
             Text(row.date)
-                .font(.caption.monospaced())
+                .font(DS.Typography.caption.monospaced())
+                .foregroundStyle(DS.Palette.textSecondary)
                 .frame(width: Metrics.dateColumnWidth, alignment: .leading)
             ForEach(Array(viewModel.grid.columns.enumerated()), id: \.element.id) { index, column in
                 cellButton(row: row, column: column, cell: row.cells[index])
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     @ViewBuilder
@@ -108,7 +102,7 @@ struct TableView: View {
     ) -> some View {
         if cell.isEmpty {
             Text("—")
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(DS.Palette.textDisabled)
                 .frame(width: Metrics.valueColumnWidth, alignment: .center)
         } else {
             Button {
@@ -120,7 +114,15 @@ struct TableView: View {
                 )
             } label: {
                 Text(cell.value ?? "—")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Palette.lime)
                     .lineLimit(1)
+                    .frame(width: Metrics.valueColumnWidth - DS.Spacing.sm, alignment: .center)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.chip, style: .continuous)
+                            .fill(DS.Palette.lime.opacity(0.14))
+                    )
                     .frame(width: Metrics.valueColumnWidth, alignment: .center)
             }
             .buttonStyle(.plain)
@@ -130,19 +132,21 @@ struct TableView: View {
     @ViewBuilder
     private var loadOlderFooter: some View {
         if viewModel.isLoadingOlder {
-            ProgressView()
+            NeonLoader()
+                .frame(height: Metrics.loaderFooterHeight)
                 .padding()
         } else {
-            VStack(spacing: 8) {
+            VStack(spacing: DS.Spacing.sm) {
                 if let message = viewModel.loadOlderErrorMessage {
                     Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Palette.danger)
                 }
                 Button("Load older days") {
                     Task { await viewModel.loadOlder() }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(LimeButtonStyle(prominent: false))
+                .fixedSize()
             }
             .padding()
         }
@@ -179,6 +183,7 @@ struct TableCellDetailSheet: View {
             content
                 .navigationTitle(selection.title)
                 .navigationBarTitleDisplayMode(.inline)
+                .dsScreenBackground()
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { dismiss() }
@@ -192,14 +197,16 @@ struct TableCellDetailSheet: View {
     private var content: some View {
         switch state {
         case .loading:
-            ProgressView("Loading…")
+            NeonLoader(label: "Loading")
         case .failure(let message):
             Text(message)
-                .foregroundStyle(.red)
+                .font(DS.Typography.body)
+                .foregroundStyle(DS.Palette.danger)
                 .padding()
         case .loaded(let entries) where entries.isEmpty:
             Text("No records for \(selection.date)")
-                .foregroundStyle(.secondary)
+                .font(DS.Typography.body)
+                .foregroundStyle(DS.Palette.textSecondary)
                 .padding()
         case .loaded(let entries):
             List {
@@ -207,24 +214,26 @@ struct TableCellDetailSheet: View {
                     ForEach(entries) { entry in
                         entryRow(entry)
                     }
+                    .listRowBackground(DS.Palette.card)
                 }
             }
         }
     }
 
     private func entryRow(_ entry: EntryDTO) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             ForEach(entry.values, id: \.fieldId) { value in
                 HStack {
                     Text("Field \(value.fieldId)")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DS.Palette.textSecondary)
                     Spacer()
                     Text(value.value ?? "—")
+                        .foregroundStyle(DS.Palette.textPrimary)
                 }
-                .font(.callout)
+                .font(DS.Typography.body)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func load() async {

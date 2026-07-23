@@ -1,5 +1,30 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/32-ios-lime-tech-design-pass (round 2, правки по ревью)
+
+Ответ на замечания ревью первого раунда:
+
+- **Модалки приведены к канону DS.** `QuickEntrySheet` (Today) переработан под дизайн-систему: `presentationDetents([.fraction(0.7), .large])` + drag-indicator, крупное hero-значение первого числового поля через `DS.Typography.hero` (лайм, автосжатие), `dsScreenBackground`, строки секций на `DS.Palette.card`. Остальные compose/edit-формы (`CategoryFormView`, `JournalComposeView`, `EntryEditView`) доведены до того же канона Form, что и `SettingsView`: `dsScreenBackground` + `listRowBackground(DS.Palette.card)` на каждой секции. Логика/биндинги/сохранение не тронуты — правки чисто стилевые, вся сьюта осталась зелёной.
+- **Захардкоженный `.foregroundStyle(.red)` заменён на `DS.Palette.danger`** во всех error-строках модалок: `TodayView` (footer required + saveError), `JournalView`, `EntriesView`, `CategoriesView`.
+- **Магическое число `64` в футере таблицы** вынесено в `TableView.Metrics.loaderFooterHeight`, рядом с остальными размерами.
+- **Мёртвый `Chip` удалён** из `DesignSystem.swift`: экрана чек-листа нет, привязывать не к чему; вернётся вместе с экраном. `DS.Typography.hero` теперь используется (`QuickEntrySheet`), токен оставлен.
+- **Иконка приложения** и **полный набор скриншотов 7 табов** — вынесены в Out of Scope / согласованное ослабление (см. тикет 32, раздел «Уточнения round 2»): нет asset-каталога в проекте; per-tab скриншоты упираются в permission-стену GUI-автоматизации симулятора в headless-окружении.
+
+Файлов тронуто в round 2: 6 (0 new, 6 mod) — `DesignSystem.swift`, `Today/TodayView.swift`, `Categories/CategoriesView.swift`, `Journal/JournalView.swift`, `Entries/EntriesView.swift`, `Table/TableView.swift`. Сборка + вся сьюта (80 тестов) зелёные на iPhone 17 (iOS 26.3).
+
+## 2026-07-23 — PHASE-01/32-ios-lime-tech-design-pass
+
+Дизайн-пасс «Lime Tech» по всем экранам. Дизайн-система (`DesignSystem.swift`: токены палитры/радиусов/spacing/типографики + общие компоненты `Card`, `LimeButtonStyle`, `Chip`, `NeonLoader`, `DSErrorState`, `DSEmptyState`, модификатор `dsScreenBackground`) и глобальная тёмная тема с лаймовым акцентом (`HabitTrackerApp`: `preferredColorScheme(.dark)`, `tint(lime)`, `UITabBar`/`UINavigationBar` appearance в near-black + лайм на активном табе) уже были заложены в этой же сессии для Today/Dashboard/Table. Этот проход довёл до канона оставшиеся экраны и привёл состояния к единому идиому: дефолтные `ProgressView("Loading…")` → `NeonLoader`, самодельные error-VStack → `DSErrorState` с лаймовой Retry, `ContentUnavailableView` → `DSEmptyState`, строки списков — на `DS.Palette.card` через `listRowBackground`, типографика/цвета — из токенов, теги журнала и заполненные ячейки таблицы подсвечены лаймом. Логика экранов не тронута. Вся сьюта (80 тестов, вкл. `DesignSystemTests`) зелёная на iPhone 17 (iOS 26.3). Скриншот Dashboard с живого бэкенда приложен к отчёту (тёмный фон, лайм-KPI, крупный H1, лайм-таб); полный набор скриншотов по всем 7 табам headless снять не удалось — переключение табов требует GUI-автоматизации симулятора, упирающейся в permission-стену окружения.
+
+Файлов тронуто: 6 (0 new, 6 mod). `DesignSystem.swift` и `HabitTrackerApp.swift` уже помечены ticket 32 в предыдущих проходах этой сессии.
+
+- `HabitTracker/Features/Table/TableView.swift` — mod, `dsScreenBackground` + `NeonLoader`/`DSErrorState`, лайм-подсветка заполненных ячеек, токены в header/row, `NeonLoader`/`LimeButtonStyle` в футере и деталь-шите.
+- `HabitTracker/Features/Categories/CategoriesView.swift` — mod, `NeonLoader`/`DSErrorState`/`DSEmptyState`, card-строки списка, токены; маркер обновлён на ticket 32.
+- `HabitTracker/Features/Journal/JournalView.swift` — mod, `NeonLoader`/`DSErrorState`/`DSEmptyState`, card-строки ленты, лайм-теги; маркер обновлён на ticket 32.
+- `HabitTracker/Features/Entries/EntriesView.swift` — mod, `NeonLoader`/`DSErrorState`/`DSEmptyState`, card-строки секций; маркер обновлён на ticket 32.
+- `HabitTracker/Features/Settings/SettingsView.swift` — mod, `dsScreenBackground`, card-строки формы, лайм-акцент кнопки, статус-индикатор на DS-цветах; маркер обновлён на ticket 32.
+- `HabitTracker/Features/Today/TodayView.swift`, `Dashboard/DashboardView.swift` — уже приведены к канону ранее в этой сессии (ticket 32).
+
 ## 2026-07-23 — PHASE-01/10-ios-dashboard
 
 Экран Dashboard: стартовый таб с паритетом веб-дашборда — счётчики категорий/записей/журнала и лента последней активности. `DashboardViewModel` грузит три существующих list-endpoint параллельно (`async let`: `GET /categories`, `GET /entries` без фильтра, `GET /journal`) и агрегирует их чистым статик-методом `aggregate(categories:entries:journalTotal:)` в `Stats` (три счётчика + `recentEntries`). Recent-лента сортируется от новых к старым (дата desc, id desc на равных датах) и обрезается до `recentEntriesLimit = 5`. Отдельного stats-endpoint не заводим (объёмы одного пользователя позволяют) — как и предписывает тикет. Журнальный счётчик берёт `total` из ответа: в `APIClient` добавлен `fetchJournalList() -> JournalListResponseDTO`, а прежний `fetchJournalEntries()` теперь тонкая обёртка над ним (без дублирования пути). UI: `List` с секциями Overview (счётчики), Recent activity (записи или «Nothing here yet») и Quick actions (переходы на Today/Journal). Навигация между табами — программное переключение через `TabView(selection:)` и enum `AppTab`; Dashboard — стартовый таб, отдаёт замыкание `onNavigate`. Приёмка: те же счётчики и активность, что и на вебе. 4 новых unit-теста (77 всего) зелёные на iPhone 17.

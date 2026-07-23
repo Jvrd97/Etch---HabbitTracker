@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/07-ios-categories-crud
-// summary: Categories screen — color-swatch list, create/edit form with field editor, delete confirmation
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Categories screen — Lime Tech dark restyle: card rows, neon loader, DS error/empty states; create/edit form + delete confirmation
 import SwiftUI
 
 struct CategoriesView: View {
@@ -16,6 +16,7 @@ struct CategoriesView: View {
         NavigationStack {
             content
                 .navigationTitle("Categories")
+                .dsScreenBackground()
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
@@ -60,47 +61,52 @@ struct CategoriesView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NeonLoader(label: "Loading")
         case .failure(let message):
-            VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text(message).multilineTextAlignment(.center)
-                Button("Retry") { Task { await viewModel.load() } }
-                    .buttonStyle(.borderedProminent)
+            DSErrorState(message: message) {
+                Task { await viewModel.load() }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
             categoryList
         }
     }
 
+    @ViewBuilder
     private var categoryList: some View {
-        List(viewModel.categories) { category in
-            Button {
-                editingCategory = category
-            } label: {
-                HStack {
-                    ColorSwatch(hex: category.color)
-                    Text(category.name).foregroundStyle(.primary)
-                    Spacer()
-                    Text("\(category.fields.count) fields")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) {
-                    pendingDeletion = category
+        if viewModel.categories.isEmpty {
+            DSEmptyState(
+                title: "No categories yet",
+                systemImage: "folder",
+                message: "Create a category to start tracking habits.",
+                action: (label: "New category", run: { isCreating = true })
+            )
+        } else {
+            List(viewModel.categories) { category in
+                Button {
+                    editingCategory = category
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    HStack(spacing: DS.Spacing.md) {
+                        ColorSwatch(hex: category.color)
+                        Text(category.name)
+                            .font(DS.Typography.card)
+                            .foregroundStyle(DS.Palette.textPrimary)
+                        Spacer()
+                        Text("\(category.fields.count) fields")
+                            .font(DS.Typography.caption)
+                            .foregroundStyle(DS.Palette.textSecondary)
+                    }
+                }
+                .listRowBackground(DS.Palette.card)
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        pendingDeletion = category
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
+            .refreshable { await viewModel.load() }
         }
-        .refreshable { await viewModel.load() }
     }
 }
 
@@ -162,15 +168,19 @@ struct CategoryFormView: View {
                     TextField("Name", text: $draft.name)
                     colorPicker
                 }
+                .listRowBackground(DS.Palette.card)
                 if !isEditing {
                     fieldsSection
+                        .listRowBackground(DS.Palette.card)
                 }
                 if let message = viewModel.saveErrorMessage {
                     Section {
-                        Text(message).foregroundStyle(.red)
+                        Text(message).foregroundStyle(DS.Palette.danger)
                     }
+                    .listRowBackground(DS.Palette.card)
                 }
             }
+            .dsScreenBackground()
             .navigationTitle(isEditing ? "Edit Category" : "New Category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

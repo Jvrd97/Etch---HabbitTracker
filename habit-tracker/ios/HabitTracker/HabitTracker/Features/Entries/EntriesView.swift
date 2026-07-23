@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/08-ios-entries-crud
-// summary: Entries history screen — date-sectioned list, category filter menu, swipe-delete with confirmation, edit form (values + notes)
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Entries history screen — Lime Tech dark restyle: card rows, neon loader, DS error/empty states; date-sectioned list, filter menu, edit form
 import SwiftUI
 
 struct EntriesView: View {
@@ -14,6 +14,7 @@ struct EntriesView: View {
         NavigationStack {
             content
                 .navigationTitle("History")
+                .dsScreenBackground()
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         filterMenu
@@ -80,19 +81,11 @@ struct EntriesView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NeonLoader(label: "Loading")
         case .failure(let message):
-            VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text(message).multilineTextAlignment(.center)
-                Button("Retry") { Task { await viewModel.load() } }
-                    .buttonStyle(.borderedProminent)
+            DSErrorState(message: message) {
+                Task { await viewModel.load() }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
             entryList
         }
@@ -101,10 +94,10 @@ struct EntriesView: View {
     @ViewBuilder
     private var entryList: some View {
         if viewModel.groupedByDate.isEmpty {
-            ContentUnavailableView(
-                "No entries",
+            DSEmptyState(
+                title: "No entries",
                 systemImage: "tray",
-                description: Text("Logged entries will appear here.")
+                message: "Logged entries will appear here."
             )
         } else {
             List {
@@ -113,6 +106,7 @@ struct EntriesView: View {
                         ForEach(group.entries) { entry in
                             entryRow(entry)
                         }
+                        .listRowBackground(DS.Palette.card)
                     }
                 }
             }
@@ -125,12 +119,13 @@ struct EntriesView: View {
         return Button {
             viewModel.beginEditing(entry)
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(category?.name ?? "Category \(entry.categoryId)")
-                    .foregroundStyle(.primary)
+                    .font(DS.Typography.card)
+                    .foregroundStyle(DS.Palette.textPrimary)
                 Text(EntrySummary.line(for: entry, category: category))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Palette.textSecondary)
             }
         }
         .swipeActions(edge: .trailing) {
@@ -192,17 +187,21 @@ struct EntryEditView: View {
                             }
                         }
                     }
+                    .listRowBackground(DS.Palette.card)
                 }
                 Section("Notes") {
                     TextField("Notes", text: notesBinding, axis: .vertical)
                         .lineLimit(1...4)
                 }
+                .listRowBackground(DS.Palette.card)
                 if let message = viewModel.saveErrorMessage {
                     Section {
-                        Text(message).foregroundStyle(.red)
+                        Text(message).foregroundStyle(DS.Palette.danger)
                     }
+                    .listRowBackground(DS.Palette.card)
                 }
             }
+            .dsScreenBackground()
             .navigationTitle("Edit Entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

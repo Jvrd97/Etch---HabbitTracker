@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry
-// summary: Today screen — habit list, dynamic quick-entry sheet with required-field gating
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
+// summary: Today screen — Lime Tech dark restyle: habit cards + quick-entry sheet with oversized value
 import SwiftUI
 
 struct TodayView: View {
@@ -14,6 +14,7 @@ struct TodayView: View {
         NavigationStack {
             content
                 .navigationTitle("Today")
+                .dsScreenBackground()
         }
         .task {
             await viewModel.load()
@@ -27,47 +28,67 @@ struct TodayView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NeonLoader(label: "Loading")
         case .failure(let message):
-            VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text(message)
-                    .multilineTextAlignment(.center)
-                Button("Retry") {
-                    Task { await viewModel.load() }
-                }
-                .buttonStyle(.borderedProminent)
+            DSErrorState(message: message) {
+                Task { await viewModel.load() }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
             categoryList
         }
     }
 
+    @ViewBuilder
     private var categoryList: some View {
-        List(viewModel.categories) { category in
-            Button {
-                selectedCategory = category
-            } label: {
-                HStack {
+        if viewModel.categories.isEmpty {
+            DSEmptyState(
+                title: "No habits yet",
+                systemImage: "checkmark.circle",
+                message: "Create a category to start tracking today."
+            )
+        } else {
+            ScrollView {
+                VStack(spacing: DS.Spacing.md) {
+                    ForEach(viewModel.categories) { category in
+                        habitCard(category)
+                    }
+                }
+                .padding(DS.Spacing.lg)
+            }
+            .refreshable {
+                await viewModel.load()
+            }
+        }
+    }
+
+    private func habitCard(_ category: CategoryDTO) -> some View {
+        Button {
+            selectedCategory = category
+        } label: {
+            Card {
+                HStack(spacing: DS.Spacing.md) {
                     if let icon = category.icon, !icon.isEmpty {
                         Text(icon)
+                            .font(DS.Typography.section)
                     }
                     Text(category.name)
-                        .foregroundStyle(.primary)
+                        .font(DS.Typography.card)
+                        .foregroundStyle(DS.Palette.textPrimary)
                     Spacer()
                     Text(todaySummary(for: category))
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typography.card)
+                        .foregroundStyle(hasEntries(category) ? DS.Palette.lime : DS.Palette.textSecondary)
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(DS.Palette.lime)
+                        .font(DS.Typography.section)
                 }
             }
         }
-        .refreshable {
-            await viewModel.load()
-        }
+        .buttonStyle(.plain)
+    }
+
+    private func hasEntries(_ category: CategoryDTO) -> Bool {
+        !viewModel.entries(forCategory: category.id).isEmpty
     }
 
     /// Compact right-side summary: today's single value, entry count, or a dash.
@@ -113,9 +134,21 @@ struct QuickEntrySheet: View {
         (fieldValues[fieldID] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The field whose value drives the oversized hero readout — the first number
+    /// field ("42 pushups" reads big), falling back to the first field of any type.
+    private var heroField: FieldDTO? {
+        sortedFields.first { $0.fieldType == .number } ?? sortedFields.first
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if let heroField {
+                    Section {
+                        heroReadout(for: heroField)
+                    }
+                    .listRowBackground(Color.clear)
+                }
                 Section {
                     ForEach(sortedFields) { field in
                         fieldRow(for: field)
@@ -126,16 +159,19 @@ struct QuickEntrySheet: View {
                             "Required: "
                                 + missingRequiredFields.map(\.name).joined(separator: ", ")
                         )
-                        .foregroundStyle(.red)
+                        .foregroundStyle(DS.Palette.danger)
                     }
                 }
+                .listRowBackground(DS.Palette.card)
                 if let message = viewModel.saveErrorMessage {
                     Section {
                         Text(message)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(DS.Palette.danger)
                     }
+                    .listRowBackground(DS.Palette.card)
                 }
             }
+            .dsScreenBackground()
             .navigationTitle(category.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -157,6 +193,25 @@ struct QuickEntrySheet: View {
                     ?? sortedFields.first?.id
             }
         }
+        .presentationDetents([.fraction(0.7), .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// Oversized lime readout of the primary field's current value, so the number
+    /// being logged dominates the sheet the way the reference mockup does.
+    private func heroReadout(for field: FieldDTO) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            Text(trimmedValue(for: field.id).isEmpty ? "—" : trimmedValue(for: field.id))
+                .font(DS.Typography.hero)
+                .foregroundStyle(DS.Palette.lime)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            Text(field.name)
+                .font(DS.Typography.caption)
+                .foregroundStyle(DS.Palette.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.md)
     }
 
     @ViewBuilder
