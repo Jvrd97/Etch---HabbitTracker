@@ -231,3 +231,15 @@ Feedback loops (`TEST_DATABASE_URL=postgresql+asyncpg://habit_user:habit_pass@lo
 - `tests/test_categories.py` — **mod**: 3 новых теста (422 на create с не-boolean полями, 422 на create без полей, 422 на patch + проверка что категория не изменилась); 2 существующих теста обновлены под новое правило — теперь создают boolean-поле перед включением checklist.
 
 Feedback loops: pytest 138/138 green, `mypy --strict app` clean, `ruff check` + `ruff format --check` clean.
+
+## 2026-07-23 — PHASE-01/39 server idempotency-key на POST /entries
+
+Файлов тронуто: 5 (2 new, 3 mod).
+
+- `app/models/entry.py` — **mod**: добавлена nullable unique-колонка `idempotency_key: Mapped[str | None]` (String(255), unique+index). Single-user app, поэтому глобальная уникальность достаточна (user-скоупа пока нет). NULL-строки не констрейнятся в Postgres — keyless-создание остаётся неограниченным.
+- `app/crud/entry.py` — **mod**: `create_entry(db, entry, idempotency_key=None)` персистит ключ; новый `get_entry_by_idempotency_key(db, key)` для дедупа повторов.
+- `app/api/entries.py` — **mod**: `POST /entries` читает заголовок `Idempotency-Key`. Если по ключу уже есть запись — возвращает её с HTTP 200 без создания дубля; первое создание — 201. Гонка параллельного повтора ловится через `IntegrityError` (unique-констрейнт как backstop): rollback + повторное чтение победителя.
+- `alembic/versions/2026_07_23_1900-b2d4e6f8a1c3_entries_idempotency_key.py` — **new**: reversible-миграция, add_column + unique-index; down_revision = a1c2d3e4f5a6. Проверена upgrade/downgrade на scratch-БД; `alembic check` не показывает дрейфа по entries (пред-существующий дрейф по is_active/is_required/order не мой).
+- `tests/test_idempotency.py` — **new**: 3 теста — повтор с тем же ключом → 200 + тот же id, без дубля в листинге; разные ключи → две записи; без заголовка → обычное создание каждый раз.
+
+Feedback loops (`TEST_DATABASE_URL=postgresql+asyncpg://habit_user:habit_pass@localhost:5433/habit_tracker_test`): pytest 142/142 green, `mypy --strict app` clean (39 файлов), `ruff check app tests` clean. Миграция upgrade+downgrade проверены на отдельной БД.

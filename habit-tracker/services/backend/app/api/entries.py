@@ -1,8 +1,9 @@
-# [review:need-review] PHASE-01/16-checklist-upsert-today-page
-# summary: added PUT /entries/checklist - idempotent upsert, 404 unknown / 422 non-checklist category
+# [review:need-review] PHASE-01/39-server-idempotency-key-entries
+# summary: POST /entries honours Idempotency-Key header - replay returns original entry (200), no dup
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -102,10 +103,17 @@ async def get_entry(
 @router.post("", response_model=EntryResponse, status_code=status.HTTP_201_CREATED)
 async def create_entry(
     entry: EntryCreate,
+    response: Response,
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> Entry:
     """
     Создать новую запись.
+
+    Если передан заголовок `Idempotency-Key`, повторный запрос с тем же ключом
+    возвращает ранее созданную запись (HTTP 200) вместо создания дубля. Это
+    закрывает окно offline-очереди, где ack мог потеряться после успешного
+    create на сервере. Первое создание отвечает 201, повтор — 200.
 
     Пример для категории "Сон" с полями "Продолжительность" и "Качество":
     ```json
@@ -126,6 +134,23 @@ async def create_entry(
     }
     ```
     """
+    if idempotency_key is not None:
+        existing = await entry_crud.get_entry_by_idempotency_key(db, idempotency_key)
+        if existing is not None:
+            response.status_code = status.HTTP_200_OK
+            return existing
+        try:
+            return await entry_crud.create_entry(db, entry, idempotency_key)
+        except IntegrityError:
+            # Concurrent replay won the race between lookup and insert; the
+            # unique constraint is the backstop. Re-read and return the winner.
+            await db.rollback()
+            winner = await entry_crud.get_entry_by_idempotency_key(db, idempotency_key)
+            if winner is None:
+                raise
+            response.status_code = status.HTTP_200_OK
+            return winner
+
     return await entry_crud.create_entry(db, entry)
 
 

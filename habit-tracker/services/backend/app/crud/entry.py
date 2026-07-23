@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/16-checklist-upsert-today-page
-# summary: added upsert_checklist_entry - one entry per (category, date), boolean values merged in place
+# [review:need-review] PHASE-01/39-server-idempotency-key-entries
+# summary: create_entry persists optional idempotency_key + get_entry_by_idempotency_key lookup
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -53,15 +53,33 @@ async def get_entries(
     return list(result.scalars().all())
 
 
-async def create_entry(db: AsyncSession, entry: EntryCreate) -> Entry:
+async def get_entry_by_idempotency_key(
+    db: AsyncSession, idempotency_key: str
+) -> Entry | None:
+    """Найти запись по client-supplied idempotency key (для дедупа повторов)."""
+    result = await db.execute(
+        select(Entry)
+        .options(selectinload(Entry.values))
+        .where(Entry.idempotency_key == idempotency_key)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_entry(
+    db: AsyncSession, entry: EntryCreate, idempotency_key: str | None = None
+) -> Entry:
     """
     Создать новую запись с значениями полей.
+
+    Если передан idempotency_key, он сохраняется на записи; повторный create
+    с тем же ключом отсекается на уровне API (unique-констрейнт как backstop).
     """
     # Создаём запись
     db_entry = Entry(
         category_id=entry.category_id,
         entry_date=entry.entry_date,
         notes=entry.notes,
+        idempotency_key=idempotency_key,
     )
     db.add(db_entry)
     await db.flush()  # Получаем ID записи

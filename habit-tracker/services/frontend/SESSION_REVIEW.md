@@ -182,3 +182,16 @@ Feedback loops: bun test 37/37 green, `tsc --noEmit` clean, eslint clean, `next 
 - `app/categories/page.tsx` — **mod**: в редакторе под селектом Display mode подсказка, когда выбран checklist без boolean-поля (совпадает с новым API-правилом 422).
 
 Feedback loops: bun test 44/44 green, `tsc --noEmit` clean, eslint clean, `next build` green (9 роутов). Визуальный smoke в браузере не выполнен.
+
+## 2026-07-23 — PHASE-01/28 Today: карточка «N дней чистый» + форма срыва
+
+Файлов тронуто: 6 (3 new, 3 mod).
+
+- `lib/today-categories.ts` — **new**: чистая раскладка категорий Today на группы `avoid` / `checklist` / `quickForm`. Avoid-режим имеет приоритет (всегда streak-карточка, не quick-input); плюс перенесённые сюда хелперы `firstNumberField` / `booleanFields`.
+- `lib/today-categories.test.ts` — **new**: тесты раскладки — avoid не попадает в quickForm, build-число остаётся quick-input, checklist с boolean → checklist, number-поле avoid-категории проброшено (или undefined, если его нет).
+- `components/AvoidStreakCard.tsx` — **new**: карточка avoid-категории — крупный лаймовый бейдж «N days clean» + маленький best, кнопка «Happened» открывает инлайн-форму (сколько + заметка) → POST /entries → `onRelapse` перезагружает стрик.
+- `lib/streak-format.ts` — **mod**: добавлен `formatCleanDays` (бейдж «N days clean» поверх `formatDays`).
+- `lib/streak-format.test.ts` — **mod**: тесты `formatCleanDays` (0/1/42 дня).
+- `app/today/page.tsx` — **mod**: раскладка через `partitionTodayCategories`; avoid-категории рендерятся секцией «Streaks» из `AvoidStreakCard`, стрики грузятся отдельно (деградация до «—» при ошибке) и перезагружаются после срыва; empty-state учитывает avoid.
+
+Feedback loops: bun test 61/61 green, `tsc --noEmit` clean, eslint clean, `next build` green (10 роутов). Визуальный smoke в браузере не выполнен.
