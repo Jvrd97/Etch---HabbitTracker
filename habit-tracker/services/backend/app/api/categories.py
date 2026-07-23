@@ -1,10 +1,13 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: typed endpoint signatures (return annotations, builtin generics) for mypy --strict
+# [review:need-review] PHASE-01/27-streak-mode-endpoint
+# summary: added GET /categories/{id}/streak (404 on unknown category)
+from typing import cast, get_args
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.crud import category as category_crud
+from app.crud import streak as streak_crud
 from app.models import Category, Field
 from app.schemas import (
     CategoryCreate,
@@ -12,12 +15,17 @@ from app.schemas import (
     CategoryResponse,
     FieldCreate,
     FieldResponse,
+    StreakResponse,
 )
+from app.schemas.category import CategoryStreakMode
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
+# Single source of truth for the allowed modes: the response Literal itself.
+STREAK_MODES: frozenset[str] = frozenset(get_args(CategoryStreakMode))
 
-@router.get("/", response_model=list[CategoryResponse])
+
+@router.get("", response_model=list[CategoryResponse])
 async def get_categories(
     skip: int = 0,
     limit: int = 100,
@@ -54,7 +62,52 @@ async def get_category(
     return category
 
 
-@router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
+@router.get("/{category_id}/streak", response_model=StreakResponse)
+async def get_category_streak(
+    category_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> StreakResponse:
+    """
+    Получить стрик категории, посчитанный по всей её истории.
+
+    Срыв — день с записью, где boolean-поле true или number-поле > 0.
+    День без записи считается чистым. Граница суток — UTC.
+
+    ВАЖНО: до тикета #23 числа считаются только в avoid-семантике —
+    расчёт одинаков для любой категории и всегда трактует «есть значение»
+    как срыв. Поле `streak_mode` в ответе — эхо колонки категории, оно
+    НЕ влияет на current_streak/best_streak/last_relapse_date. Для
+    `streak_mode='build'` числа поэтому бессмысленны; их интерпретацию
+    (и переключение семантики) добавляет #23. UI обязан скрывать блок
+    стрика для build-категорий.
+    """
+    category = await category_crud.get_category(db, category_id)
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Category with id {category_id} not found",
+        )
+
+    # The DB column is a plain VARCHAR, so a row written outside this API (fixture,
+    # manual SQL, older migration) can hold a mode the response Literal forbids.
+    # Rejecting loudly beats casting a value we never checked.
+    if category.streak_mode not in STREAK_MODES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Category {category_id} has an unknown streak_mode",
+        )
+
+    stats = await streak_crud.get_category_streak(db, category_id)
+    return StreakResponse(
+        category_id=category.id,
+        streak_mode=cast(CategoryStreakMode, category.streak_mode),
+        current_streak=stats.current_streak,
+        best_streak=stats.best_streak,
+        last_relapse_date=stats.last_relapse_date,
+    )
+
+
+@router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_category(
     category: CategoryCreate,
     db: AsyncSession = Depends(get_db),

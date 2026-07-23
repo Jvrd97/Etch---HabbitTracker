@@ -1,10 +1,13 @@
 /**
  * API Client for Habit Tracker Backend
  */
-// [review:need-review] PHASE-01/25-ai-reports-history
-// summary: + insightsAPI.getAll/getById (reports history) + AIReportListItem type
+// [review:need-review] PHASE-01/27-streak-mode-endpoint, PHASE-01/30-lan-api-proxy-rewrite
+// summary: + streak_mode on Category/CategoryCreate, CategoryStreak type, categoriesAPI.getStreak; API_BASE_URL defaults to the same-origin /api/v1 proxy
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// Relative by default: requests go to the same origin that served the page and
+// are proxied to the backend by the Next rewrite (see next.config.ts). Keeps the
+// app reachable from any device on the LAN without host-specific config.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
 class APIError extends Error {
   constructor(public status: number, message: string) {
@@ -43,7 +46,7 @@ async function fetcher<T>(
 // Categories API
 export const categoriesAPI = {
   getAll: async (activeOnly = true) => {
-    return fetcher<Category[]>(`/categories/?active_only=${activeOnly}`);
+    return fetcher<Category[]>(`/categories?active_only=${activeOnly}`);
   },
 
   getById: async (id: number) => {
@@ -51,7 +54,7 @@ export const categoriesAPI = {
   },
 
   create: async (data: CategoryCreate) => {
-    return fetcher<Category>('/categories/', {
+    return fetcher<Category>('/categories', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -68,6 +71,10 @@ export const categoriesAPI = {
     return fetcher<void>(`/categories/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  getStreak: async (id: number) => {
+    return fetcher<CategoryStreak>(`/categories/${id}/streak`);
   },
 
   addField: async (categoryId: number, field: FieldCreate) => {
@@ -94,7 +101,7 @@ export const entriesAPI = {
     if (params?.skip) query.append('skip', params.skip.toString());
     if (params?.limit) query.append('limit', params.limit.toString());
 
-    return fetcher<Entry[]>(`/entries/?${query.toString()}`);
+    return fetcher<Entry[]>(`/entries?${query.toString()}`);
   },
 
   getById: async (id: number) => {
@@ -102,7 +109,7 @@ export const entriesAPI = {
   },
 
   create: async (data: EntryCreate) => {
-    return fetcher<Entry>('/entries/', {
+    return fetcher<Entry>('/entries', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -139,7 +146,7 @@ export const entriesAPI = {
 export const tableAPI = {
   get: async (dateFrom: string, dateTo: string) => {
     return fetcher<TableResponse>(
-      `/table/?date_from=${dateFrom}&date_to=${dateTo}`
+      `/table?date_from=${dateFrom}&date_to=${dateTo}`
     );
   },
 };
@@ -147,14 +154,14 @@ export const tableAPI = {
 // Insights API
 export const insightsAPI = {
   create: async (periodDays?: number) => {
-    return fetcher<AIReport>('/insights/', {
+    return fetcher<AIReport>('/insights', {
       method: 'POST',
       body: JSON.stringify(periodDays !== undefined ? { period_days: periodDays } : {}),
     });
   },
 
   getAll: async () => {
-    return fetcher<AIReportListItem[]>('/insights/');
+    return fetcher<AIReportListItem[]>('/insights');
   },
 
   getById: async (id: number) => {
@@ -180,7 +187,7 @@ export const journalAPI = {
     if (params?.skip) query.append('skip', params.skip.toString());
     if (params?.limit) query.append('limit', params.limit.toString());
 
-    return fetcher<JournalListResponse>(`/journal/?${query.toString()}`);
+    return fetcher<JournalListResponse>(`/journal?${query.toString()}`);
   },
 
   getById: async (id: number) => {
@@ -188,7 +195,7 @@ export const journalAPI = {
   },
 
   create: async (data: JournalEntryCreate) => {
-    return fetcher<JournalEntry>('/journal/', {
+    return fetcher<JournalEntry>('/journal', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -214,6 +221,15 @@ export const journalAPI = {
 
 // Types
 export type CategoryDisplayMode = 'form' | 'checklist';
+export type CategoryStreakMode = 'build' | 'avoid';
+
+export interface CategoryStreak {
+  category_id: number;
+  streak_mode: CategoryStreakMode;
+  current_streak: number;
+  best_streak: number;
+  last_relapse_date: string | null;
+}
 
 export interface Category {
   id: number;
@@ -222,6 +238,7 @@ export interface Category {
   icon?: string;
   color?: string;
   display_mode: CategoryDisplayMode;
+  streak_mode: CategoryStreakMode;
   group?: string | null;
   is_active: boolean;
   created_at: string;
@@ -235,6 +252,7 @@ export interface CategoryCreate {
   icon?: string;
   color?: string;
   display_mode?: CategoryDisplayMode;
+  streak_mode?: CategoryStreakMode;
   group?: string | null;
   is_active?: boolean;
   fields?: FieldCreate[];

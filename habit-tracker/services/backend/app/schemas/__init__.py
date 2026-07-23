@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/25-ai-reports-history
-# summary: re-export insight schemas (+ InsightListItem)
+# [review:need-review] PHASE-01/27-streak-mode-endpoint
+# summary: re-export StreakResponse
 from app.schemas.category import (
     CategoryCreate,
     CategoryUpdate,
@@ -28,6 +28,7 @@ from app.schemas.insight import (
     InsightRequest,
     InsightResponse,
 )
+from app.schemas.streak import StreakResponse
 from app.schemas.table import (
     TableCategoryMeta,
     TableCell,
@@ -56,6 +57,7 @@ __all__ = [
     "InsightListItem",
     "InsightRequest",
     "InsightResponse",
+    "StreakResponse",
     "TableCategoryMeta",
     "TableCell",
     "TableDay",

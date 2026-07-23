@@ -1,6 +1,5 @@
-# [review:need-review] PHASE-01/17-table-groups-sport-columns
-# summary: table view aggregation; added category metadata (group, display_mode, primary field = first by order)
-import logging
+# [review:need-review] PHASE-01/27-streak-mode-endpoint
+# summary: table view aggregation; EAV value parsing moved to app/crud/values.py
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import cast
@@ -9,15 +8,11 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import category as category_crud
+from app.crud.values import is_true_value, parse_number
 from app.models import Category, Entry, EntryValue, Field
 from app.models.field import FieldType
 from app.schemas.category import CategoryDisplayMode
 from app.schemas.table import TableCategoryMeta, TableCell, TableDay, TableResponse
-
-logger = logging.getLogger(__name__)
-
-# String values treated as "true" for boolean fields (EAV stores text)
-BOOLEAN_TRUE_VALUES = frozenset({"true", "1", "yes"})
 
 
 @dataclass
@@ -36,20 +31,12 @@ class _CellAccumulator:
         if value is None:
             return
         if self.field_type == FieldType.NUMBER:
-            try:
-                self.number_sum += float(value)
+            number = parse_number(value, field_id=field_id, entry_id=entry_id)
+            if number is not None:
+                self.number_sum += number
                 self.has_number = True
-            except ValueError:
-                # Non-numeric text in a number field: skip from sum.
-                # The value itself is not logged (PII-safe).
-                logger.warning(
-                    "non-numeric value in number field",
-                    extra={"field_id": field_id, "entry_id": entry_id},
-                )
         elif self.field_type == FieldType.BOOLEAN:
-            self.any_true = (
-                self.any_true or value.strip().lower() in BOOLEAN_TRUE_VALUES
-            )
+            self.any_true = self.any_true or is_true_value(value)
         else:
             self.last_value = value  # rows arrive ordered by created_at, id
 

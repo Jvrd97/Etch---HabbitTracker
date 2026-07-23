@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/15-category-display-mode-group
-# summary: added display_mode (form|checklist, default form) and group columns to Category
+# [review:need-review] PHASE-01/27-streak-mode-endpoint
+# summary: added streak_mode (build|avoid, default build) alongside display_mode/group
 from __future__ import annotations
 
 from datetime import datetime
@@ -33,6 +33,9 @@ class Category(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     display_mode: Mapped[str] = mapped_column(
         String(20), default="form", server_default="form"
+    )
+    streak_mode: Mapped[str] = mapped_column(
+        String(20), default="build", server_default="build"
     )
     group: Mapped[str | None] = mapped_column(String(100))
 

@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/20-category-page-chart
-// summary: category editor with display mode/group; card header now links to /categories/[id] chart page
+// [review:need-review] PHASE-01/27-streak-mode-endpoint
+// summary: category editor gained a streak mode select (build|avoid) shown as a card badge
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -9,6 +9,7 @@ import {
   Category,
   CategoryCreate,
   CategoryDisplayMode,
+  CategoryStreakMode,
   FieldCreate,
 } from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -20,6 +21,11 @@ const DEFAULT_CATEGORY_COLOR = '#B8FF36';
 const DISPLAY_MODE_LABELS: Record<CategoryDisplayMode, string> = {
   form: 'Form',
   checklist: 'Checklist',
+};
+
+const STREAK_MODE_LABELS: Record<CategoryStreakMode, string> = {
+  build: 'Build habit',
+  avoid: 'Avoid',
 };
 
 const inputClass =
@@ -202,6 +208,11 @@ export default function CategoriesPage() {
                 <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-lime/10 text-lime">
                   {DISPLAY_MODE_LABELS[category.display_mode]}
                 </span>
+                {category.streak_mode === 'avoid' && (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-danger/10 text-danger">
+                    {STREAK_MODE_LABELS.avoid}
+                  </span>
+                )}
                 {category.group && (
                   <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-text-secondary">
                     {category.group}
@@ -228,6 +239,9 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
   const [color, setColor] = useState(category?.color || DEFAULT_CATEGORY_COLOR);
   const [displayMode, setDisplayMode] = useState<CategoryDisplayMode>(
     category?.display_mode ?? 'form'
+  );
+  const [streakMode, setStreakMode] = useState<CategoryStreakMode>(
+    category?.streak_mode ?? 'build'
   );
   const [group, setGroup] = useState(category?.group ?? '');
   const [isActive, setIsActive] = useState(category?.is_active ?? true);
@@ -268,6 +282,7 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
         description,
         color,
         display_mode: displayMode,
+        streak_mode: streakMode,
         group: group.trim() || null,
         is_active: isActive,
         fields: fields.filter(f => f.name), // Only include fields with names
@@ -346,6 +361,22 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
               </select>
             </div>
 
+            <div>
+              <label className="block text-[13px] font-medium text-text-secondary mb-2">
+                Streak mode
+              </label>
+              <select
+                value={streakMode}
+                onChange={(e) => setStreakMode(e.target.value as CategoryStreakMode)}
+                className={inputClass}
+              >
+                <option value="build">{STREAK_MODE_LABELS.build}</option>
+                <option value="avoid">{STREAK_MODE_LABELS.avoid}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-medium text-text-secondary mb-2">
                 Group

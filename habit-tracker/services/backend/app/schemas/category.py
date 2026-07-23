@@ -1,10 +1,11 @@
-# [review:need-review] PHASE-01/15-category-display-mode-group
-# summary: added display_mode (Literal form|checklist) and group to category schemas
+# [review:need-review] PHASE-01/27-streak-mode-endpoint
+# summary: added streak_mode (Literal build|avoid) to category base/update schemas
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Literal
 
 CategoryDisplayMode = Literal["form", "checklist"]
+CategoryStreakMode = Literal["build", "avoid"]
 
 
 class FieldBase(BaseModel):
@@ -57,6 +58,7 @@ class CategoryBase(BaseModel):
     icon: str | None = Field(None, max_length=50)
     color: str | None = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     display_mode: CategoryDisplayMode = "form"
+    streak_mode: CategoryStreakMode = "build"
     group: str | None = Field(None, max_length=100)
 
 
@@ -78,6 +80,7 @@ class CategoryUpdate(BaseModel):
     color: str | None = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     is_active: bool | None = None
     display_mode: CategoryDisplayMode | None = None
+    streak_mode: CategoryStreakMode | None = None
     group: str | None = Field(None, max_length=100)
 
 

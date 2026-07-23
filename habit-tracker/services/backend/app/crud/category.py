@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/15-category-display-mode-group
-# summary: create_category passes display_mode and group through to the model
+# [review:need-review] PHASE-01/27-streak-mode-endpoint
+# summary: create_category also passes streak_mode through to the model
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -58,6 +58,7 @@ async def create_category(db: AsyncSession, category: CategoryCreate) -> Categor
         icon=category.icon,
         color=category.color,
         display_mode=category.display_mode,
+        streak_mode=category.streak_mode,
         group=category.group,
     )
     db.add(db_category)
