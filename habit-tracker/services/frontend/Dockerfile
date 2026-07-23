@@ -15,6 +15,7 @@ COPY . .
 
 # Client bundle talks to the same origin; Next rewrites /api/v1 to the backend.
 ENV NEXT_PUBLIC_API_URL=/api/v1
+ENV API_PROXY_TARGET=http://backend:8000
 RUN bun run build
 
 # Production image
