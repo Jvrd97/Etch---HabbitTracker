@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/18-table-checklist-columns-backfill
-// summary: /table page - checklist categories render boolean-field columns with toggleable check cells (optimistic PUT checklist backfill); form categories keep primary-field cells + day panel
+// [review:need-review] PHASE-01/33-table-empty-cell-quick-add
+// summary: /table page - empty form cell opens quick-add EntryForm (category+date); duration cells formatted; checklist toggle cells unchanged
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -15,7 +15,9 @@ import {
 } from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import { Check, Save, Table2, Trash2, X } from 'lucide-react';
+import EntryForm from '@/components/EntryForm';
+import { formatSecondsToHM } from '@/lib/duration';
+import { Check, Plus, Save, Table2, Trash2, X } from 'lucide-react';
 
 const DAYS_SHOWN = 14;
 const UNGROUPED_TAB = 'Other';
@@ -92,24 +94,27 @@ interface SelectedCell {
 
 export default function TablePage() {
   const [data, setData] = useState<TableResponse | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [fieldsByCategory, setFieldsByCategory] = useState<Map<number, Field[]>>(
     new Map()
   );
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
+  const [quickAdd, setQuickAdd] = useState<SelectedCell | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       const { from, to } = dateRange();
-      const [response, categories] = await Promise.all([
+      const [response, categoriesData] = await Promise.all([
         tableAPI.get(from, to),
         categoriesAPI.getAll(),
       ]);
       setData(response);
+      setCategories(categoriesData);
       setFieldsByCategory(
-        new Map(categories.map((c: Category) => [c.id, c.fields]))
+        new Map(categoriesData.map((c: Category) => [c.id, c.fields]))
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load table');
@@ -297,18 +302,24 @@ export default function TablePage() {
                           </td>
                         );
                       }
+                      const displayValue =
+                        value !== null && column.category.primary_field_type === 'duration'
+                          ? formatSecondsToHM(Number(value))
+                          : value;
                       return (
                         <td key={columnKey(column)} className="px-1 py-1">
                           <button
                             onClick={() =>
-                              setSelected({ category: column.category, date: day.date })
+                              value === null
+                                ? setQuickAdd({ category: column.category, date: day.date })
+                                : setSelected({ category: column.category, date: day.date })
                             }
                             aria-label={`${column.category.name} on ${day.date}`}
                             className={`w-full text-left px-3 py-2 rounded-xl transition-all duration-200 hover:bg-white/5 ${
                               value !== null ? 'text-lime font-medium' : 'text-text-disabled'
                             }`}
                           >
-                            {value ?? '—'}
+                            {displayValue ?? '—'}
                           </button>
                         </td>
                       );
@@ -326,8 +337,25 @@ export default function TablePage() {
           category={selected.category}
           date={selected.date}
           onClose={() => setSelected(null)}
+          onAddEntry={() => {
+            setQuickAdd(selected);
+            setSelected(null);
+          }}
           onChanged={loadData}
           onError={setError}
+        />
+      )}
+
+      {quickAdd && (
+        <EntryForm
+          categories={categories}
+          lockedCategoryId={quickAdd.category.id}
+          date={quickAdd.date}
+          onClose={() => setQuickAdd(null)}
+          onSuccess={() => {
+            setQuickAdd(null);
+            loadData();
+          }}
         />
       )}
     </div>
@@ -338,11 +366,19 @@ interface DayEntriesPanelProps {
   category: TableCategoryMeta;
   date: string;
   onClose: () => void;
+  onAddEntry: () => void;
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
 }
 
-function DayEntriesPanel({ category, date, onClose, onChanged, onError }: DayEntriesPanelProps) {
+function DayEntriesPanel({
+  category,
+  date,
+  onClose,
+  onAddEntry,
+  onChanged,
+  onError,
+}: DayEntriesPanelProps) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -419,6 +455,14 @@ function DayEntriesPanel({ category, date, onClose, onChanged, onError }: DayEnt
             />
           ))
         )}
+
+        <button
+          onClick={onAddEntry}
+          className="flex w-full items-center justify-center gap-2 px-4 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)]"
+        >
+          <Plus className="w-4 h-4" strokeWidth={2.5} />
+          Add entry
+        </button>
       </div>
     </div>
   );
