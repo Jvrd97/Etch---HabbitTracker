@@ -14,6 +14,8 @@ export interface EntryFormProps {
   onSuccess: () => void;
   /** Pin the form to one category and hide the picker (quick-add from a category page). */
   lockedCategoryId?: number;
+  /** Prefill the entry date (e.g. the table cell's day); defaults to today. */
+  date?: string;
 }
 
 export default function EntryForm({
@@ -21,11 +23,14 @@ export default function EntryForm({
   onClose,
   onSuccess,
   lockedCategoryId,
+  date,
 }: EntryFormProps) {
   const [categoryId, setCategoryId] = useState<number>(
     lockedCategoryId ?? categories[0]?.id ?? 0
   );
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [entryDate, setEntryDate] = useState(
+    date ?? new Date().toISOString().split('T')[0]
+  );
   const [notes, setNotes] = useState('');
   const [values, setValues] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
