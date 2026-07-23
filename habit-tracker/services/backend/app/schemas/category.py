@@ -13,7 +13,11 @@ class FieldBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=100)
     field_type: str = Field(
-        ..., description="Тип поля: text, number, boolean, date, datetime, time, select"
+        ...,
+        description=(
+            "Тип поля: text, number, boolean, date, datetime, time, select, "
+            "duration (затраченное время в секундах)"
+        ),
     )
     is_required: bool = False
     default_value: str | None = None

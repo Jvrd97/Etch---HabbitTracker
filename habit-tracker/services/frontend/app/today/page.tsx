@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
-// summary: Today page — checklist chips are boolean-fields only; legacy checklist categories without booleans fall back to quick number input
+// [review:need-review] PHASE-01/32-today-cumulative-counter
+// summary: Today page — quick number rows show the running daily total and add to it in place
 
 import { useCallback, useEffect, useState } from 'react';
 import { categoriesAPI, entriesAPI, Category, Entry, Field } from '@/lib/api';
@@ -44,8 +44,24 @@ function buildCheckedMap(categories: Category[], entries: Entry[]): CheckedMap {
   return map;
 }
 
+/** Sum of today's values for one number field across all of a category's entries. */
+function numberFieldSum(
+  entries: Entry[],
+  categoryId: number,
+  fieldId: number
+): number {
+  return entries
+    .filter((entry) => entry.category_id === categoryId)
+    .reduce((sum, entry) => {
+      const value = entry.values.find((v) => v.field_id === fieldId);
+      const parsed = value ? Number(value.value) : Number.NaN;
+      return Number.isFinite(parsed) ? sum + parsed : sum;
+    }, 0);
+}
+
 export default function TodayPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [checked, setChecked] = useState<CheckedMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +75,7 @@ export default function TodayPage() {
         entriesAPI.getAll({ startDate: date, endDate: date }),
       ]);
       setCategories(categoriesData);
+      setEntries(entriesData);
       setChecked(buildCheckedMap(categoriesData, entriesData));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load today data');
@@ -182,6 +199,7 @@ export default function TodayPage() {
                     key={category.id}
                     category={category}
                     numberField={numberField}
+                    initialTotal={numberFieldSum(entries, category.id, numberField.id)}
                     onError={setError}
                   />
                 ))}
@@ -197,17 +215,30 @@ export default function TodayPage() {
 interface QuickNumberRowProps {
   category: Category;
   numberField: Field;
+  /** Sum of today's entries for this field, shown as the running total. */
+  initialTotal: number;
   onError: (message: string) => void;
 }
 
-function QuickNumberRow({ category, numberField, onError }: QuickNumberRowProps) {
+/** Total as a clean string: integers stay integers, floats drop trailing zeros. */
+function formatTotal(n: number): string {
+  return Number.isInteger(n) ? String(n) : Number(n.toFixed(2)).toString();
+}
+
+function QuickNumberRow({
+  category,
+  numberField,
+  initialTotal,
+  onError,
+}: QuickNumberRowProps) {
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
-  const [savedValue, setSavedValue] = useState<string | null>(null);
+  const [total, setTotal] = useState(initialTotal);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!value) return;
+    const amount = Number(value);
+    if (!value || !Number.isFinite(amount)) return;
     setSaving(true);
     try {
       await entriesAPI.create({
@@ -215,7 +246,7 @@ function QuickNumberRow({ category, numberField, onError }: QuickNumberRowProps)
         entry_date: todayISO(),
         values: [{ field_id: numberField.id, value }],
       });
-      setSavedValue(value);
+      setTotal((current) => current + amount);
       setValue('');
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Failed to save entry');
@@ -231,12 +262,15 @@ function QuickNumberRow({ category, numberField, onError }: QuickNumberRowProps)
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-text-primary truncate">{category.name}</p>
-        <p className="text-xs text-text-disabled truncate">
-          {numberField.name}
-          {savedValue !== null && (
-            <span className="text-lime"> — saved: {savedValue}</span>
-          )}
-        </p>
+        <p className="text-xs text-text-disabled truncate">{numberField.name}</p>
+      </div>
+      <div className="text-right leading-tight">
+        <span className="block text-2xl font-semibold text-lime tabular-nums">
+          {formatTotal(total)}
+        </span>
+        <span className="block text-[11px] uppercase tracking-widest text-text-disabled">
+          today
+        </span>
       </div>
       <input
         type="number"
@@ -244,13 +278,13 @@ function QuickNumberRow({ category, numberField, onError }: QuickNumberRowProps)
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="0"
-        aria-label={`${category.name}: ${numberField.name}`}
+        aria-label={`${category.name}: add ${numberField.name}`}
         className="w-24 px-4 py-2.5 bg-surface border border-white/10 rounded-2xl text-text-primary placeholder:text-text-disabled outline-none transition-all duration-200 focus:border-lime focus:ring-2 focus:ring-lime/25"
       />
       <button
         type="submit"
         disabled={saving || !value}
-        aria-label={`Save ${category.name}`}
+        aria-label={`Add to ${category.name}`}
         className="p-2.5 bg-lime text-background rounded-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(184,255,54,0.35)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
       >
         <Plus className="w-4 h-4" strokeWidth={2.5} />

@@ -92,6 +92,44 @@ class TestTableAggregation:
         assert cell["aggregated_value"] == "42"
         assert cell["entry_count"] == 2
 
+    async def test_duration_field_is_summed_per_day(self, client: AsyncClient):
+        """DURATION values (elapsed seconds) sum like numbers: 1200 + 2400 -> 3600."""
+        category = (
+            await client.post(
+                "/api/v1/categories",
+                json={
+                    "name": "Running",
+                    "fields": [
+                        {"name": "Elapsed", "field_type": "duration", "order": 1},
+                    ],
+                },
+            )
+        ).json()
+        elapsed_id = _field_id(category, "Elapsed")
+        await _create_entry(
+            client,
+            category["id"],
+            "2024-02-01",
+            [{"field_id": elapsed_id, "value": "1200"}],
+        )
+        await _create_entry(
+            client,
+            category["id"],
+            "2024-02-01",
+            [{"field_id": elapsed_id, "value": "2400"}],
+        )
+
+        response = await client.get(
+            "/api/v1/table?date_from=2024-02-01&date_to=2024-02-01"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        cell = _cell(_day(data, "2024-02-01"), elapsed_id)
+        assert cell["aggregated_value"] == "3600"
+        assert cell["entry_count"] == 2
+        meta = next(c for c in data["categories"] if c["id"] == category["id"])
+        assert meta["primary_field_type"] == "duration"
+
     async def test_empty_day_has_no_cells(
         self, client: AsyncClient, table_category: dict
     ):
