@@ -282,3 +282,6 @@ Avoid-стрик карточка «N дней чистый» на экране 
 - `HabitTracker/Features/Today/TodayView.swift` — mod, PendingUploadsBadge над списком Today.
 - `HabitTrackerTests/OutboxQueueTests.swift` — new, 8 тестов (enqueue→flush, no-duplicate, порядок, connectivity-stop, авто-флаш, SwiftData round-trip, TodayViewModel offline/online).
 - `HabitTracker.xcodeproj/project.pbxproj` — mod, регистрация OutboxQueue.swift + OutboxQueueTests.swift.
+
+## 2026-07-23 — PHASE-01/39-server-idempotency-key-entries (iOS wiring)
+Файлы: API/APIClient.swift (mod: keyed createEntry overload + Idempotency-Key header), Cache/OutboxQueue.swift (mod: flush передаёт PendingEntry.id.uuidString, доки), HabitTrackerTests/OutboxQueueTests.swift (mod: тест стабильного ключа при replay). Сьюта 153/153.

@@ -6,6 +6,8 @@ import XCTest
 /// Scriptable poster standing in for the network side of the outbox.
 private final class MockOutboxPoster: OutboxPosting {
     private(set) var received: [EntryCreateDTO] = []
+    /// Idempotency-Key passed on each `createEntry` call, in call order.
+    private(set) var receivedKeys: [String?] = []
     /// Behaviour per call; default echoes a saved entry back. Set to `throw` for failures.
     var behavior: (EntryCreateDTO) throws -> EntryDTO = { entry in
         EntryDTO(
@@ -17,8 +19,9 @@ private final class MockOutboxPoster: OutboxPosting {
         )
     }
 
-    func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO {
+    func createEntry(_ entry: EntryCreateDTO, idempotencyKey: String?) async throws -> EntryDTO {
         received.append(entry)
+        receivedKeys.append(idempotencyKey)
         return try behavior(entry)
     }
 }
@@ -91,6 +94,25 @@ final class OutboxQueueTests: XCTestCase {
         _ = await queue.flush(using: online)
         XCTAssertEqual(online.received.count, 1)
         XCTAssertEqual(queue.pendingCount, 0)
+    }
+
+    func testReplayedFlushSendsStableIdempotencyKeyEqualToPendingID() async {
+        let queue = OutboxQueue(store: InMemoryOutboxStore())
+        queue.enqueue(makePayload(count: "42"))
+        let pendingID = queue.pending.first!.id.uuidString
+
+        // First flush hits a dead network: the entry survives and is replayed next time.
+        let offline = MockOutboxPoster()
+        offline.behavior = { _ in throw APIClientError.timeout }
+        _ = await queue.flush(using: offline)
+
+        // Second flush succeeds. The lost-ack window closes only if the replay carries
+        // the same key as the first attempt — namely the stable PendingEntry.id.
+        let online = MockOutboxPoster()
+        _ = await queue.flush(using: online)
+
+        XCTAssertEqual(offline.receivedKeys, [pendingID])
+        XCTAssertEqual(online.receivedKeys, [pendingID])
     }
 
     func testFlushPreservesEnqueueOrder() async {

@@ -5,6 +5,8 @@ Closes the offline-queue duplicate window: a replayed create with the same
 key must return the original entry instead of creating a second one.
 """
 
+# [review:need-review] PHASE-01/39-server-idempotency-key-entries
+# summary: POST /entries Idempotency-Key - replay with same key returns original (200) no dup, distinct keys create separate entries, no header still creates every time
 import pytest
 from httpx import AsyncClient
 

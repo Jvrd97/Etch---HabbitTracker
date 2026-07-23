@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/36-ios-category-charts, PHASE-01/38-ios-avoid-streaks, PHASE-01/37-ios-insights
-// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI exposes GET /table; TodayAPI adds GET /categories/{id}/streak; InsightsAPI adds POST/GET /insights
+// [review:need-review] PHASE-01/36-ios-category-charts, PHASE-01/38-ios-avoid-streaks, PHASE-01/37-ios-insights, PHASE-01/39-server-idempotency-key-entries
+// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI exposes GET /table; TodayAPI adds GET /categories/{id}/streak; InsightsAPI adds POST/GET /insights; createEntry forwards an optional Idempotency-Key header
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -202,8 +202,20 @@ extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, 
         )
     }
 
+    /// Foreground create (`TodayAPI`/`CategoryDetailAPI`): no idempotency key — an
+    /// online save posts once and never replays, so there is nothing to de-duplicate.
     func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO {
-        try await sendJSON(path: "/entries", method: "POST", body: entry)
+        try await createEntry(entry, idempotencyKey: nil)
+    }
+
+    /// Outbox replay (`OutboxPosting`): carries the stable `PendingEntry.id` as the
+    /// `Idempotency-Key` so a lost-ack retry returns the original entry, not a duplicate.
+    func createEntry(
+        _ entry: EntryCreateDTO, idempotencyKey: String?
+    ) async throws -> EntryDTO {
+        try await sendJSON(
+            path: "/entries", method: "POST", body: entry, idempotencyKey: idempotencyKey
+        )
     }
 
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO {
@@ -276,11 +288,14 @@ extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, 
     }
 
     private func sendJSON<Body: Encodable, Response: Decodable>(
-        path: String, method: String, body: Body
+        path: String, method: String, body: Body, idempotencyKey: String? = nil
     ) async throws -> Response {
         let url = try makeAPIURL(path: path, query: [])
         var request = makeRequest(url: url, method: method)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let idempotencyKey {
+            request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        }
         request.httpBody = try APIJSONCoding.makeEncoder().encode(body)
         let data = try await send(request)
         return try decodeJSON(data)

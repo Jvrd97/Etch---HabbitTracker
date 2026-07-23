@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/12-ios-offline-queue
-// summary: offline outbox for POST /entries — PendingEntry model + OutboxStore (in-memory + SwiftData), OutboxQueue that enqueues on connectivity failure and flushes in order (delete-after-success — at-most-once only while the network is fully absent; see flush() note on the ack-loss window), and an NWPathMonitor-backed auto-flush wiring
+// [review:need-review] PHASE-01/12-ios-offline-queue, PHASE-01/39-server-idempotency-key-entries
+// summary: offline outbox for POST /entries — PendingEntry model + OutboxStore (in-memory + SwiftData), OutboxQueue that enqueues on connectivity failure and flushes in order (delete-after-success; replays carry PendingEntry.id as Idempotency-Key so a lost-ack retry returns the original entry, not a duplicate), and an NWPathMonitor-backed auto-flush wiring
 import Foundation
 import Network
 import SwiftData
@@ -24,9 +24,11 @@ struct PendingEntry: Identifiable, Equatable {
 }
 
 /// The network operation the queue replays. `APIClient` conforms via its existing
-/// `createEntry`; tests substitute a scriptable poster.
+/// `createEntry`; tests substitute a scriptable poster. The `idempotencyKey` is the
+/// stable `PendingEntry.id`, so a replay of the same queued create always carries the
+/// same key and the server collapses the duplicate instead of inserting a second row.
 protocol OutboxPosting {
-    func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO
+    func createEntry(_ entry: EntryCreateDTO, idempotencyKey: String?) async throws -> EntryDTO
 }
 
 extension APIClient: OutboxPosting {}
@@ -216,13 +218,15 @@ protocol NetworkPathMonitoring: AnyObject {
 
 /// The offline outbox for `POST /entries`. A create that fails on a connectivity error
 /// is enqueued instead of lost; `flush` replays queued creates in order, deleting each
-/// only after the server accepts it — so a create is never dropped, and never sent twice
-/// as long as the network is fully absent. Delete-after-success does NOT cover the window
-/// where the server accepted the create but the ack was lost (or the app crashed before
-/// the delete): on the next flush that create is replayed and, without a server-side
-/// idempotency key on `POST /entries`, produces a real duplicate. Closing that gap needs
-/// an idempotency key on the API (out of scope for this slice — follow-up: issue
-/// PHASE-01/39-server-idempotency-key-entries).
+/// only after the server accepts it — so a create is never dropped, and never sent twice.
+/// For creates that originate in the outbox, the lost-ack window (server accepted the
+/// create but the ack was lost, or the app crashed before the delete) does not produce a
+/// duplicate: every replay carries the same stable `PendingEntry.id` as the
+/// `Idempotency-Key`, so the server returns the original entry instead of inserting a
+/// second row. This guarantee is scoped to the replay path only. A direct online create
+/// (`TodayViewModel`/`CategoryDetailViewModel`) sends no key; if its ack is lost and the
+/// payload is then enqueued, the new `PendingEntry.id` is a fresh key the server has not
+/// seen, so that replay can still insert a duplicate of the online create.
 @MainActor
 final class OutboxQueue: ObservableObject {
     /// After this many non-connectivity failures a create is parked as `.failed` rather
@@ -268,10 +272,12 @@ final class OutboxQueue: ObservableObject {
     /// (the network is down — the rest wait for the next trigger, preserving order);
     /// a non-connectivity error increments attempts and, past `maxAttempts`, parks the
     /// create as `.failed` so a bad payload never blocks good ones behind it. Each
-    /// accepted create is deleted immediately — at-most-once while the network is fully
-    /// absent, but not across a lost ack / crash-before-delete (that create is replayed
-    /// and, without a server idempotency key, duplicates; see the type doc above).
-    /// Concurrent flushes are coalesced via `isFlushing`.
+    /// accepted create is deleted immediately; a replay after a lost ack or a
+    /// crash-before-delete reuses the same stable `PendingEntry.id` as the
+    /// `Idempotency-Key`, so re-sending a queued create returns the original entry instead
+    /// of creating a duplicate. (This covers only creates that were queued; a lost-ack on a
+    /// direct online create that is later enqueued gets a fresh key — see the type doc
+    /// above.) Concurrent flushes are coalesced via `isFlushing`.
     @discardableResult
     func flush(using poster: OutboxPosting) async -> [EntryDTO] {
         guard !isFlushing else { return [] }
@@ -281,7 +287,9 @@ final class OutboxQueue: ObservableObject {
         var saved: [EntryDTO] = []
         for entry in store.fetchAll() where entry.status == .pending {
             do {
-                let result = try await poster.createEntry(entry.payload)
+                let result = try await poster.createEntry(
+                    entry.payload, idempotencyKey: entry.id.uuidString
+                )
                 store.delete(id: entry.id)
                 saved.append(result)
             } catch let error as APIClientError where error.isConnectivity {
