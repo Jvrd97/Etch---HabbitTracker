@@ -11,7 +11,7 @@ services:
     restart: always
     command: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --max-requests 1000 --max-requests-jitter 50 --graceful-timeout 30 --timeout 60 --access-logfile - --error-logfile -
     environment:
-      API_KEY: ${API_KEY:?API_KEY must be set in production}
+      API_KEY: ${API_KEY:-}
     volumes: []  # run from the image, no live-reload bind mount
 
   frontend:
