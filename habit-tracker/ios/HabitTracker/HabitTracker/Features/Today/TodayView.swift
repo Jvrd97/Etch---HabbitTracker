@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/38-ios-avoid-streaks
-// summary: Today screen — habit cards + quick-entry sheet; avoid categories show "N days clean" streak card + "It happened" relapse form
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/38-ios-avoid-streaks, PHASE-01/11-ios-read-cache
+// summary: Today screen — habit cards + quick-entry sheet; avoid categories show "N days clean" streak card + "It happened" relapse form; offline banner atop when data came from the read cache
 import SwiftUI
 
 struct TodayView: View {
@@ -13,9 +13,14 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Today")
-                .dsScreenBackground()
+            VStack(spacing: 0) {
+                if let offlineAsOf = viewModel.offlineAsOf {
+                    OfflineBanner(updatedAt: offlineAsOf)
+                }
+                content
+            }
+            .navigationTitle("Today")
+            .dsScreenBackground()
         }
         .task {
             await viewModel.load()

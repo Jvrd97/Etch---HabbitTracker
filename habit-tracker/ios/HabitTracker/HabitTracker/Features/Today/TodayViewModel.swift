@@ -1,7 +1,14 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry, PHASE-01/38-ios-avoid-streaks
-// summary: Today screen state — loads categories + entries + avoid streaks; POST for form, idempotent checklist PUT; logRelapse posts count + reloads streak
+// [review:need-review] PHASE-01/05-ios-today-quick-entry, PHASE-01/38-ios-avoid-streaks, PHASE-01/11-ios-read-cache
+// summary: Today screen state — loads categories + entries + avoid streaks through the read cache (serves last snapshot + offline flag when the network is down); POST for form, idempotent checklist PUT; logRelapse posts count + reloads streak
 import Foundation
-import os
+
+/// The categories/entries/streaks a single Today load produced, cached as one unit so
+/// airplane mode can restore the whole screen from the last successful fetch.
+struct TodaySnapshot: Codable, Equatable {
+    let categories: [CategoryDTO]
+    let entries: [EntryDTO]
+    let streaks: [Int: CategoryStreakDTO]
+}
 
 @MainActor
 final class TodayViewModel: ObservableObject {
@@ -20,12 +27,18 @@ final class TodayViewModel: ObservableObject {
     /// during `load()`. A category missing here has no streak to show (either it
     /// is not an avoid category, or its streak request failed and degraded away).
     @Published private(set) var streaks: [Int: CategoryStreakDTO] = [:]
+    /// When non-nil the screen is showing cached data because the last load fell back
+    /// to the read cache; the value is the timestamp of that cached snapshot.
+    @Published private(set) var offlineAsOf: Date?
     @Published var saveErrorMessage: String?
 
     static let notConfiguredMessage = "Set the server address in Settings"
     static let noCountFieldMessage = "This habit has no number field to log"
+    /// Read-cache key for the whole Today snapshot.
+    static let cacheKey = "today.snapshot"
 
     private let apiProvider: () -> TodayAPI?
+    private let cache: ReadThroughCache
     private let dateFormatter: DateFormatter
     private let now: () -> Date
 
@@ -33,10 +46,12 @@ final class TodayViewModel: ObservableObject {
     /// changes (server address / API key) take effect without an app restart.
     init(
         apiProvider: @escaping () -> TodayAPI?,
+        cacheStore: CacheStore = InMemoryCacheStore(),
         timeZone: TimeZone = .current,
         now: @escaping () -> Date = Date.init
     ) {
         self.apiProvider = apiProvider
+        self.cache = ReadThroughCache(store: cacheStore, now: now)
         self.now = now
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -48,44 +63,19 @@ final class TodayViewModel: ObservableObject {
     /// Convenience init with a fixed API (used by unit tests).
     convenience init(
         api: TodayAPI,
+        cacheStore: CacheStore = InMemoryCacheStore(),
         timeZone: TimeZone = .current,
         now: @escaping () -> Date = Date.init
     ) {
-        self.init(apiProvider: { api }, timeZone: timeZone, now: now)
+        self.init(apiProvider: { api }, cacheStore: cacheStore, timeZone: timeZone, now: now)
     }
-
-    private static let logger = Logger(
-        subsystem: "com.habittracker.app", category: "TodayViewModel"
-    )
 
     /// Builds the production view model from stored Settings (UserDefaults + Keychain).
     static func live() -> TodayViewModel {
-        TodayViewModel(apiProvider: {
-            let address = UserDefaults.standard
-                .string(forKey: SettingsViewModel.serverAddressDefaultsKey) ?? ""
-            guard let baseURL = APIClient.makeBaseURL(from: address) else {
-                return nil
-            }
-            let keychain = KeychainStore()
-            return APIClient(
-                baseURL: baseURL,
-                apiKeyProvider: {
-                    do {
-                        return try keychain.read(SettingsViewModel.apiKeyKeychainKey)
-                    } catch {
-                        // A Keychain failure must not crash a background request:
-                        // send the request without a key and let the backend
-                        // answer 401, which surfaces as a visible error in the UI.
-                        // Logged (status code only, no secrets) so it is not
-                        // silently swallowed.
-                        Self.logger.error(
-                            "Keychain read for API key failed: \(String(describing: error))"
-                        )
-                        return nil
-                    }
-                }
-            )
-        })
+        TodayViewModel(
+            apiProvider: { EntryMutationLive.makeAPIClient() },
+            cacheStore: ReadCacheLive.shared
+        )
     }
 
     /// Today's date in the backend's `YYYY-MM-DD` format.
@@ -93,7 +83,9 @@ final class TodayViewModel: ObservableObject {
         dateFormatter.string(from: now())
     }
 
-    /// Loads active categories and today's entries in one pass.
+    /// Loads active categories, today's entries, and avoid streaks in one pass, through
+    /// the read cache: a successful fetch refreshes the screen and the cache; when the
+    /// network is down the last cached snapshot is shown with an offline timestamp.
     func load() async {
         state = .loading
         guard let api = apiProvider() else {
@@ -102,18 +94,39 @@ final class TodayViewModel: ObservableObject {
         }
         let today = todayString
         do {
-            async let categoriesTask = api.fetchCategories()
-            async let entriesTask = api.fetchEntries(startDate: today, endDate: today)
-            let (fetchedCategories, fetchedEntries) = try await (categoriesTask, entriesTask)
-            categories = fetchedCategories.filter(\.isActive)
-            todayEntries = fetchedEntries
-            streaks = await loadStreaks(for: categories, api: api)
+            let outcome = try await cache.load(key: Self.cacheKey) {
+                async let categoriesTask = api.fetchCategories()
+                async let entriesTask = api.fetchEntries(startDate: today, endDate: today)
+                let (fetchedCategories, fetchedEntries) = try await (categoriesTask, entriesTask)
+                let active = fetchedCategories.filter(\.isActive)
+                let loadedStreaks = await self.loadStreaks(for: active, api: api)
+                return TodaySnapshot(
+                    categories: active, entries: fetchedEntries, streaks: loadedStreaks
+                )
+            }
+            apply(outcome)
             state = .loaded
         } catch let error as APIClientError {
             state = .failure(error.userMessage)
         } catch {
             state = .failure("Unexpected error")
         }
+    }
+
+    /// Publishes a snapshot, recording whether it came from the network or the cache.
+    private func apply(_ outcome: CacheOutcome<TodaySnapshot>) {
+        let snapshot: TodaySnapshot
+        switch outcome {
+        case .fresh(let value):
+            snapshot = value
+            offlineAsOf = nil
+        case .stale(let value, let updatedAt):
+            snapshot = value
+            offlineAsOf = updatedAt
+        }
+        categories = snapshot.categories
+        todayEntries = snapshot.entries
+        streaks = snapshot.streaks
     }
 
     /// Fetches streaks for every avoid category concurrently. A single failed

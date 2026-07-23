@@ -1,7 +1,6 @@
-// [review:need-review] PHASE-01/06-ios-table-view
-// summary: Table screen state — loads GET /table (default 30 days), paginates older, fetches cell details
+// [review:need-review] PHASE-01/06-ios-table-view, PHASE-01/11-ios-read-cache
+// summary: Table screen state — loads GET /table (default 30 days) through the read cache (serves last window + offline flag when the network is down), paginates older, fetches cell details
 import Foundation
-import os
 
 @MainActor
 final class TableViewModel: ObservableObject {
@@ -16,13 +15,19 @@ final class TableViewModel: ObservableObject {
     @Published private(set) var state: LoadState = .idle
     @Published private(set) var grid: TableGrid = .empty
     @Published private(set) var isLoadingOlder = false
+    /// When non-nil the grid is showing a cached window because the last load fell back
+    /// to the read cache; the value is the timestamp of that cached snapshot.
+    @Published private(set) var offlineAsOf: Date?
     @Published var loadOlderErrorMessage: String?
 
     static let notConfiguredMessage = "Set the server address in Settings"
     /// Number of days fetched per page (initial load and each "load older" step).
     static let pageDays = 30
+    /// Read-cache key for the most-recent-window table response.
+    static let cacheKey = "table.recent"
 
     private let apiProvider: () -> TableAPI?
+    private let cache: ReadThroughCache
     private let dateFormatter: DateFormatter
     private let calendar: Calendar
     private let now: () -> Date
@@ -34,18 +39,16 @@ final class TableViewModel: ObservableObject {
     /// Start of the oldest range already fetched; the next page ends the day before it.
     private var earliestLoadedFrom: Date?
 
-    private static let logger = Logger(
-        subsystem: "com.habittracker.app", category: "TableViewModel"
-    )
-
     /// Primary init: the provider is re-evaluated on every load, so Settings
     /// changes (server address / API key) take effect without an app restart.
     init(
         apiProvider: @escaping () -> TableAPI?,
+        cacheStore: CacheStore = InMemoryCacheStore(),
         timeZone: TimeZone = .current,
         now: @escaping () -> Date = Date.init
     ) {
         self.apiProvider = apiProvider
+        self.cache = ReadThroughCache(store: cacheStore, now: now)
         self.now = now
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -60,41 +63,24 @@ final class TableViewModel: ObservableObject {
     /// Convenience init with a fixed API (used by unit tests).
     convenience init(
         api: TableAPI,
+        cacheStore: CacheStore = InMemoryCacheStore(),
         timeZone: TimeZone = .current,
         now: @escaping () -> Date = Date.init
     ) {
-        self.init(apiProvider: { api }, timeZone: timeZone, now: now)
+        self.init(apiProvider: { api }, cacheStore: cacheStore, timeZone: timeZone, now: now)
     }
 
     /// Builds the production view model from stored Settings (UserDefaults + Keychain).
     static func live() -> TableViewModel {
-        TableViewModel(apiProvider: {
-            let address = UserDefaults.standard
-                .string(forKey: SettingsViewModel.serverAddressDefaultsKey) ?? ""
-            guard let baseURL = APIClient.makeBaseURL(from: address) else {
-                return nil
-            }
-            let keychain = KeychainStore()
-            return APIClient(
-                baseURL: baseURL,
-                apiKeyProvider: {
-                    do {
-                        return try keychain.read(SettingsViewModel.apiKeyKeychainKey)
-                    } catch {
-                        // A Keychain failure must not crash a background request:
-                        // send without a key and let the backend answer 401,
-                        // which surfaces as a visible error. Logged (no secrets).
-                        Self.logger.error(
-                            "Keychain read for API key failed: \(String(describing: error))"
-                        )
-                        return nil
-                    }
-                }
-            )
-        })
+        TableViewModel(
+            apiProvider: { EntryMutationLive.makeAPIClient() },
+            cacheStore: ReadCacheLive.shared
+        )
     }
 
     /// Loads the most recent `pageDays` days, replacing any previously loaded data.
+    /// Runs through the read cache: a successful fetch refreshes the grid and the cache;
+    /// when the network is down the last cached window is shown with an offline timestamp.
     func load() async {
         state = .loading
         loadOlderErrorMessage = nil
@@ -105,10 +91,21 @@ final class TableViewModel: ObservableObject {
         let to = now()
         let from = pageStart(endingAt: to)
         do {
-            let response = try await api.fetchTable(
-                dateFrom: dateFormatter.string(from: from),
-                dateTo: dateFormatter.string(from: to)
-            )
+            let outcome = try await cache.load(key: Self.cacheKey) {
+                try await api.fetchTable(
+                    dateFrom: self.dateFormatter.string(from: from),
+                    dateTo: self.dateFormatter.string(from: to)
+                )
+            }
+            let response: TableResponseDTO
+            switch outcome {
+            case .fresh(let value):
+                response = value
+                offlineAsOf = nil
+            case .stale(let value, let updatedAt):
+                response = value
+                offlineAsOf = updatedAt
+            }
             categories = response.categories
             loadedDays = Dictionary(
                 response.days.map { ($0.date, $0) }, uniquingKeysWith: { _, new in new }

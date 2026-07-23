@@ -1,5 +1,30 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/11-ios-read-cache
+
+Read-кэш: данные Today и Table видны в авиарежиме с честным баннером, а не белым экраном. Vertical slice — локальная схема (SwiftData) → прозрачная прослойка → VM → UI-баннер → тесты.
+
+- **Schema (local).** `CacheRecord` (`@Model`, `@Attribute(.unique) key`, `payload Data`, `updatedAt`) — одна строка на ключ, снапшот целиком (без точечной инвалидации, см. Out of Scope / #12).
+- **Service.** `CacheStore` (протокол save/load Codable + timestamp) с двумя реализациями: `SwiftDataCacheStore` (on-disk, upsert по ключу) и `InMemoryCacheStore` (дефолт в тестах / fallback). `ReadThroughCache` — прозрачная прослойка: успешный ответ перезаписывает кэш и отдаёт `.fresh`; при connectivity-ошибке (`APIClientError.isConnectivity` = timeout/transport) отдаёт `.stale(value, updatedAt)` из кэша, а не бросает. Реальные серверные ошибки (401/500/invalidResponse) стеклом не маскируются — пробрасываются. `ReadCacheLive.shared` собирает on-disk store один раз с in-memory fallback.
+- **ViewModel.** `TodayViewModel.load()` кэширует общий `TodaySnapshot` (активные категории + записи + стрики) под `today.snapshot`; `TableViewModel.load()` кэширует окно `TableResponseDTO` под `table.recent`. Оба публикуют `offlineAsOf: Date?` (nil = онлайн). `.live()` обеих VM переведены на общий `EntryMutationLive.makeAPIClient()` + `ReadCacheLive.shared` (дублирующая keychain-обвязка удалена).
+- **UI.** `OfflineBanner` — «Offline · showing data from <время>» поверх контента Today и Table, когда `offlineAsOf != nil`.
+- **Tests.** 6 тестов `CacheStoreTests` (SwiftData round-trip/overwrite/missing, классификатор connectivity, ReadThrough fresh/stale/rethrow-empty/rethrow-non-connectivity) + по 3 интеграционных теста на Today и Table VM (успех кэширует и остаётся онлайн; авиарежим отдаёт кэш + timestamp свежей VM с мёртвой сетью; без кэша — честный failure). Строгий TDD.
+
+Вся сьюта (143 теста, +12) зелёная на iPhone 17 (iOS 26.3). Сборка app-таргета успешна.
+
+Файлов тронуто: 10 (5 new, 5 mod).
+
+- `HabitTracker/Cache/CacheStore.swift` — new, `CacheStore`/`InMemoryCacheStore`/`ReadThroughCache`/`CacheOutcome`/`APIClientError.isConnectivity`.
+- `HabitTracker/Cache/SwiftDataCacheStore.swift` — new, `@Model CacheRecord`, on-disk store + `ReadCacheLive`.
+- `HabitTracker/Shared/OfflineBanner.swift` — new, баннер офлайн-данных.
+- `HabitTracker/Features/Today/TodayViewModel.swift` — mod, `TodaySnapshot` + load через кэш + `offlineAsOf`, `.live()` на общий фабрике.
+- `HabitTracker/Features/Today/TodayView.swift` — mod, баннер поверх контента.
+- `HabitTracker/Features/Table/TableViewModel.swift` — mod, load через кэш + `offlineAsOf`, `.live()` на общей фабрике.
+- `HabitTracker/Features/Table/TableView.swift` — mod, баннер поверх контента.
+- `HabitTrackerTests/CacheStoreTests.swift` — new, 6 тестов кэш-слоя.
+- `HabitTrackerTests/TodayViewModelCacheTests.swift` — new, 3 интеграционных теста.
+- `HabitTrackerTests/TableViewModelCacheTests.swift` — new, 3 интеграционных теста.
+
 ## 2026-07-23 — PHASE-01/37-ios-insights
 
 Раздел Insights: AI-разбор периода с телефона + история отчётов, паритет с бэкенд-эндпоинтами #24/#25. Vertical slice через все слои (DTO/API → VM → UI + вход с Dashboard).
