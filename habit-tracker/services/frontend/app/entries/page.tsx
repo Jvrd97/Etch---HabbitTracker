@@ -1,8 +1,9 @@
 'use client';
-// [review:need-review] PHASE-01/29-category-page-nav-and-quick-add
-// summary: Entries page now consumes the shared EntryForm component (inline modal extracted for reuse on the category page)
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+// summary: /entries opens the entry form instantly via ?new=1 (1 tap from Dashboard) and gains an always-visible FAB
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { entriesAPI, categoriesAPI, Entry, Category } from '@/lib/api';
 import { groupEntriesByDate } from '@/lib/entry-groups';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -12,11 +13,21 @@ import EntryForm from '@/components/EntryForm';
 import { Plus, Filter, Calendar } from 'lucide-react';
 
 export default function EntriesPage() {
+  // useSearchParams needs a Suspense boundary for static prerendering
+  return (
+    <Suspense fallback={<LoadingSpinner size="lg" />}>
+      <EntriesPageContent />
+    </Suspense>
+  );
+}
+
+function EntriesPageContent() {
+  const searchParams = useSearchParams();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(searchParams.get('new') === '1');
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
 
   useEffect(() => {
@@ -138,6 +149,15 @@ export default function EntriesPage() {
           ))}
         </div>
       )}
+
+      {/* Floating action button: always reachable without scrolling */}
+      <button
+        onClick={() => setShowForm(true)}
+        aria-label="New entry"
+        className="fixed bottom-6 right-6 z-40 p-4 bg-lime text-background rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.45)]"
+      >
+        <Plus className="w-6 h-6" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }

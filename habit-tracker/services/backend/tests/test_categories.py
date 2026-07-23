@@ -2,8 +2,8 @@
 Tests for Category CRUD operations.
 """
 
-# [review:need-review] PHASE-01/15-category-display-mode-group
-# summary: added tests for display_mode/group create, patch, defaults and 422 on invalid mode
+# [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+# summary: + tests for 422 on checklist mode without a boolean field (create & patch)
 
 import pytest
 from httpx import AsyncClient
@@ -87,7 +87,12 @@ class TestCategoryCreate:
         """Category can be created with checklist mode and a group."""
         response = await client.post(
             "/api/v1/categories",
-            json={"name": "Vitamins", "display_mode": "checklist", "group": "Health"},
+            json={
+                "name": "Vitamins",
+                "display_mode": "checklist",
+                "group": "Health",
+                "fields": [{"name": "Taken", "field_type": "boolean"}],
+            },
         )
         assert response.status_code == 201
         data = response.json()
@@ -228,9 +233,13 @@ class TestCategoryUpdate:
         assert data["name"] == "Sleep"  # unchanged
 
     async def test_update_category_display_mode_and_group(self, client: AsyncClient):
-        """Existing category can be switched to checklist mode and grouped."""
+        """Existing category with a boolean field can be switched to checklist mode."""
         create_response = await client.post(
-            "/api/v1/categories", json={"name": "Vitamins"}
+            "/api/v1/categories",
+            json={
+                "name": "Vitamins",
+                "fields": [{"name": "Taken", "field_type": "boolean"}],
+            },
         )
         category_id = create_response.json()["id"]
 
@@ -255,6 +264,55 @@ class TestCategoryUpdate:
             f"/api/v1/categories/{category_id}", json={"display_mode": "grid"}
         )
         assert response.status_code == 422
+
+    async def test_create_checklist_without_boolean_field_rejected(
+        self, client: AsyncClient
+    ):
+        """POST with display_mode=checklist and no boolean field returns 422."""
+        response = await client.post(
+            "/api/v1/categories",
+            json={
+                "name": "Coffee",
+                "display_mode": "checklist",
+                "fields": [{"name": "Cups", "field_type": "number"}],
+            },
+        )
+        assert response.status_code == 422
+        assert "boolean" in response.json()["detail"].lower()
+
+    async def test_create_checklist_without_any_fields_rejected(
+        self, client: AsyncClient
+    ):
+        """POST with display_mode=checklist and empty fields returns 422."""
+        response = await client.post(
+            "/api/v1/categories",
+            json={"name": "Coffee", "display_mode": "checklist"},
+        )
+        assert response.status_code == 422
+        assert "boolean" in response.json()["detail"].lower()
+
+    async def test_patch_to_checklist_without_boolean_field_rejected(
+        self, client: AsyncClient
+    ):
+        """PATCH switching to checklist fails with 422 when no boolean field exists."""
+        create_response = await client.post(
+            "/api/v1/categories",
+            json={
+                "name": "Coffee",
+                "fields": [{"name": "Cups", "field_type": "number"}],
+            },
+        )
+        category_id = create_response.json()["id"]
+
+        response = await client.patch(
+            f"/api/v1/categories/{category_id}", json={"display_mode": "checklist"}
+        )
+        assert response.status_code == 422
+        assert "boolean" in response.json()["detail"].lower()
+
+        # Category is untouched by the rejected patch
+        get_response = await client.get(f"/api/v1/categories/{category_id}")
+        assert get_response.json()["display_mode"] == "form"
 
     async def test_update_nonexistent_category(self, client: AsyncClient):
         """Test updating nonexistent category returns 404."""

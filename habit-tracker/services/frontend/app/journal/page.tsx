@@ -1,9 +1,10 @@
 'use client';
-// [review:need-review] PHASE-01/adhoc-lime-redesign
-// summary: Journal restyled as timeline cards with mood badge, tag chips and Lime Tech editor with round mood picker
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+// summary: Journal entry content now rendered through the shared Markdown component (headings/lists/bold)
 
 import { useEffect, useState } from 'react';
 import { journalAPI, JournalEntry, JournalEntryCreate } from '@/lib/api';
+import Markdown from '@/components/Markdown';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import { Plus, BookOpen, X, Smile, Frown, Meh, Zap, CloudRain, Wind, Pencil, Trash2 } from 'lucide-react';
@@ -160,7 +161,9 @@ export default function JournalPage() {
                   </div>
                 </div>
 
-                <p className="text-text-secondary whitespace-pre-wrap mb-4">{entry.content}</p>
+                <div className="mb-4">
+                  <Markdown content={entry.content} />
+                </div>
 
                 {entry.tags && (
                   <div className="flex flex-wrap gap-2">

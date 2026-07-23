@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/27-streak-mode-endpoint
-// summary: category editor gained a streak mode select (build|avoid) shown as a card badge
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+// summary: editor hints that checklist mode requires a boolean field (matches API 422 rule)
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -359,6 +359,13 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
                 <option value="form">{DISPLAY_MODE_LABELS.form}</option>
                 <option value="checklist">{DISPLAY_MODE_LABELS.checklist}</option>
               </select>
+              {displayMode === 'checklist' &&
+                !fields.some((f) => f.field_type === 'boolean') && (
+                  <p className="text-[13px] text-warning mt-2">
+                    Checklist needs at least one boolean field — add one below or
+                    the save will be rejected.
+                  </p>
+                )}
             </div>
 
             <div>

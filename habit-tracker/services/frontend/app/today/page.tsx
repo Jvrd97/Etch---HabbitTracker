@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/16-checklist-upsert-today-page
-// summary: Today page - checklist chip grid (tap = optimistic toggle via PUT upsert) + quick number input for form categories
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+// summary: Today page — checklist chips are boolean-fields only; legacy checklist categories without booleans fall back to quick number input
 
 import { useCallback, useEffect, useState } from 'react';
 import { categoriesAPI, entriesAPI, Category, Entry, Field } from '@/lib/api';
@@ -20,6 +20,12 @@ function firstNumberField(category: Category): Field | undefined {
     .find((f) => f.field_type === 'number');
 }
 
+function booleanFields(category: Category): Field[] {
+  return [...category.fields]
+    .filter((f) => f.field_type === 'boolean')
+    .sort((a, b) => a.order - b.order);
+}
+
 /** checked-state per category: field_id -> boolean */
 type CheckedMap = Record<number, Record<number, boolean>>;
 
@@ -29,7 +35,7 @@ function buildCheckedMap(categories: Category[], entries: Entry[]): CheckedMap {
     if (category.display_mode !== 'checklist') continue;
     const entry = entries.find((e) => e.category_id === category.id);
     const fieldsChecked: Record<number, boolean> = {};
-    for (const field of category.fields) {
+    for (const field of booleanFields(category)) {
       const value = entry?.values.find((v) => v.field_id === field.id);
       fieldsChecked[field.id] = value?.value === TRUE_VALUE;
     }
@@ -93,14 +99,18 @@ export default function TodayPage() {
 
   if (loading) return <LoadingSpinner size="lg" />;
 
+  // Legacy data fallback: a checklist category saved before the API started
+  // requiring a boolean field is treated like a form category below.
   const checklistCategories = categories.filter(
-    (c) => c.display_mode === 'checklist' && c.fields.length > 0
+    (c) => c.display_mode === 'checklist' && booleanFields(c).length > 0
   );
   const quickFormCategories = categories
     .map((category) => ({ category, numberField: firstNumberField(category) }))
     .filter(
       (item): item is { category: Category; numberField: Field } =>
-        item.category.display_mode === 'form' && item.numberField !== undefined
+        item.numberField !== undefined &&
+        (item.category.display_mode === 'form' ||
+          booleanFields(item.category).length === 0)
     );
 
   return (
@@ -136,9 +146,7 @@ export default function TodayPage() {
                 <div className="flex-1 h-px bg-white/5" />
               </div>
               <div className="flex flex-wrap gap-3">
-                {[...category.fields]
-                  .sort((a, b) => a.order - b.order)
-                  .map((field) => {
+                {booleanFields(category).map((field) => {
                     const isChecked = checked[category.id]?.[field.id] ?? false;
                     return (
                       <button

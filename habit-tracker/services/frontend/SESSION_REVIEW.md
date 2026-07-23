@@ -147,3 +147,20 @@ Feedback loops: bun test 33/33 green, tsc --noEmit clean, eslint clean, next bui
 - `issues/PHASE-01/in-work/30-lan-api-proxy-rewrite.md` — **new**: LAN-доступ через Next-rewrite. Заведён отдельным тикетом, потому что это смена сетевой топологии: браузер → Next rewrite → backend, хост backend'а больше не попадает в бандл, Next становится звеном на горячем пути.
 
 Feedback loops: bun test 37/37 green, `tsc --noEmit` clean, eslint clean, `next build` green (10 роутов). Визуальный smoke в браузере не выполнен.
+
+## 2026-07-23 — PHASE-01/31 web quick-wins: MD-рендер, /entries?new=1 + FAB, checklist-фолбэк
+
+Файлов тронуто: 9 (3 new, 5 mod, 1 deleted).
+
+- `lib/markdown.ts` — **new**: чистый парсер markdown — заголовки `#`–`####`, маркированные (`-`/`*`) и нумерованные списки, инлайн-`**bold**` (незакрытый маркер остаётся текстом). Возвращает типизированные блоки, рендеринга не содержит.
+- `lib/markdown.test.ts` — **new**: smoke-тесты парсера (уровни заголовков, оба вида списков, параграфы, bold в заголовке/пункте, незакрытый bold, несколько bold-подряд).
+- `components/Markdown.tsx` — **new**: общий рендерер поверх `lib/markdown` — заменяет `InsightMarkdown`, стили сохранены (H1-H2 → lime h3, H3-H4 → h4, буллеты с lime-точкой), плюс нумерованные пункты и `<strong>` для bold.
+- `components/InsightMarkdown.tsx` — **deleted**: вытеснен общим `Markdown`; bold там вообще не парсился.
+- `app/page.tsx` — **mod**: Dashboard использует `Markdown`; все три ссылки «Log entry / Create first entry» ведут на `/entries?new=1` — форма открывается в 1 тап.
+- `app/insights/page.tsx` — **mod**: история отчётов рендерится общим `Markdown`.
+- `app/journal/page.tsx` — **mod**: контент записи рендерится через `Markdown` вместо plain `whitespace-pre-wrap`.
+- `app/entries/page.tsx` — **mod**: `?new=1` открывает форму сразу (через `useSearchParams`, страница обёрнута в `Suspense`); добавлен FAB «+» fixed внизу справа — виден без скролла.
+- `app/today/page.tsx` — **mod**: чипы чек-листа строятся только из boolean-полей; legacy-категория `checklist` без boolean-полей (кейс «Coffee») фолбэчит в quick number input.
+- `app/categories/page.tsx` — **mod**: в редакторе под селектом Display mode подсказка, когда выбран checklist без boolean-поля (совпадает с новым API-правилом 422).
+
+Feedback loops: bun test 44/44 green, `tsc --noEmit` clean, eslint clean, `next build` green (9 роутов). Визуальный smoke в браузере не выполнен.

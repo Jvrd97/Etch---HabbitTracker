@@ -1,10 +1,10 @@
 'use client';
-// [review:need-review] PHASE-01/25-ai-reports-history
-// summary: + period selector (7/30/90) for AI разбор, history link; InsightMarkdown extracted to component
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+// summary: Dashboard — shared Markdown renderer for AI разбор; Log entry links now open /entries?new=1 (form opens in 1 tap)
 
 import { useEffect, useState } from 'react';
 import { categoriesAPI, entriesAPI, insightsAPI, journalAPI, AIReport, Entry } from '@/lib/api';
-import InsightMarkdown from '@/components/InsightMarkdown';
+import Markdown from '@/components/Markdown';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import {
@@ -152,7 +152,7 @@ export default function Dashboard() {
 
   const quickActions = [
     { label: 'Add category', href: '/categories?action=new', icon: FolderPlus },
-    { label: 'Log entry', href: '/entries?action=new', icon: Plus },
+    { label: 'Log entry', href: '/entries?new=1', icon: Plus },
     { label: 'Write journal', href: '/journal?action=new', icon: PenLine },
   ];
 
@@ -189,7 +189,7 @@ export default function Dashboard() {
             today to keep the streak alive.
           </p>
           <Link
-            href="/entries?action=new"
+            href="/entries?new=1"
             className="inline-flex items-center gap-2 mt-5 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)]"
           >
             <Plus className="w-4 h-4" strokeWidth={2} />
@@ -285,7 +285,7 @@ export default function Dashboard() {
           )}
           {insight.status === 'ready' && (
             <div>
-              <InsightMarkdown content={insight.report.content} />
+              <Markdown content={insight.report.content} />
               <p className="mt-5 text-[13px] text-text-disabled">
                 Период: {insight.report.period_days} дн. · Модель: {insight.report.model}
               </p>
@@ -335,7 +335,7 @@ export default function Dashboard() {
               </div>
               <p className="text-text-secondary">Nothing here yet</p>
               <Link
-                href="/entries?action=new"
+                href="/entries?new=1"
                 className="mt-5 inline-flex items-center gap-2 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)]"
               >
                 Create first entry

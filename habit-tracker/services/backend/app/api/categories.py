@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/27-streak-mode-endpoint
-# summary: added GET /categories/{id}/streak (404 on unknown category)
+# [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+# summary: POST/PATCH reject display_mode=checklist without a boolean field (422)
 from typing import cast, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,6 +23,22 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 # Single source of truth for the allowed modes: the response Literal itself.
 STREAK_MODES: frozenset[str] = frozenset(get_args(CategoryStreakMode))
+
+BOOLEAN_FIELD_TYPE = "boolean"
+CHECKLIST_DISPLAY_MODE = "checklist"
+CHECKLIST_NEEDS_BOOLEAN_DETAIL = (
+    "display_mode='checklist' requires at least one field with "
+    "field_type='boolean'; add a boolean field or keep display_mode='form'"
+)
+
+
+def _ensure_checklist_has_boolean_field(field_types: list[str]) -> None:
+    """Raise 422 when a checklist category would end up with no boolean field."""
+    if BOOLEAN_FIELD_TYPE not in field_types:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=CHECKLIST_NEEDS_BOOLEAN_DETAIL,
+        )
 
 
 @router.get("", response_model=list[CategoryResponse])
@@ -138,6 +154,11 @@ async def create_category(
     }
     ```
     """
+    if category.display_mode == CHECKLIST_DISPLAY_MODE:
+        _ensure_checklist_has_boolean_field(
+            [field.field_type for field in category.fields or []]
+        )
+
     # Проверяем, не существует ли уже категория с таким именем
     existing = await category_crud.get_category_by_name(db, category.name)
     if existing:
@@ -160,6 +181,17 @@ async def update_category(
 
     Можно обновить только нужные поля.
     """
+    if category_update.display_mode == CHECKLIST_DISPLAY_MODE:
+        existing = await category_crud.get_category(db, category_id)
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Category with id {category_id} not found",
+            )
+        _ensure_checklist_has_boolean_field(
+            [field.field_type for field in existing.fields]
+        )
+
     category = await category_crud.update_category(db, category_id, category_update)
     if not category:
         raise HTTPException(

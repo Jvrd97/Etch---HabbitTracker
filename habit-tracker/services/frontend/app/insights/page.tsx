@@ -1,10 +1,10 @@
 'use client';
-// [review:need-review] PHASE-01/25-ai-reports-history
-// summary: /insights page — history of AI reports as cards, expandable full report view
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
+// summary: /insights page — switched to shared Markdown renderer (bold/lists/headings now parsed)
 
 import { useEffect, useState } from 'react';
 import { insightsAPI, AIReport, AIReportListItem } from '@/lib/api';
-import InsightMarkdown from '@/components/InsightMarkdown';
+import Markdown from '@/components/Markdown';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import { Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
@@ -151,7 +151,7 @@ export default function InsightsPage() {
                 )}
                 {isOpen && (
                   <div className="px-6 pb-6 border-t border-white/5 pt-5">
-                    <InsightMarkdown content={view.report.content} />
+                    <Markdown content={view.report.content} />
                   </div>
                 )}
               </div>

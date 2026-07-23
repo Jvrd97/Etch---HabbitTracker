@@ -222,3 +222,12 @@ Feedback loops: pytest 113/113 green (`TEST_DATABASE_URL=postgresql+asyncpg://ha
 Feedback loops (`TEST_DATABASE_URL=postgresql+asyncpg://habit_user:habit_pass@localhost:5433/habit_tracker_test`): на момент завершения правок pytest был 131/131 green; ruff check + format clean, `mypy --strict app` clean (39 файлов), `mypy --strict tests/test_crud_values.py tests/test_streak.py` clean.
 
 ВНИМАНИЕ: во время сессии в тот же worktree параллельно писала другая сессия — в `app/api/{entries,insights,journal,table,categories}.py` появилось снятие trailing slash у роутов (`@router.get("/")` → `@router.get("")`), в `next.config.ts` — `allowedDevOrigins`. Эти изменения не мои и не входят ни в один из трёх коммитов ниже. Из-за них repo-wide pytest сейчас красный (23 падения в `test_journal`/`test_checklist`/`test_entries`/`test_insights` — тесты ещё ходят на старые URL с завершающим слэшем). Тесты в границах этого тикета зелёные: `pytest tests/test_crud_values.py tests/test_streak.py tests/test_table.py tests/test_categories.py` — 62/62 green.
+
+## 2026-07-23 — PHASE-01/31 checklist-валидация: 422 без boolean-поля
+
+Файлов тронуто: 2 (0 new, 2 mod).
+
+- `app/api/categories.py` — **mod**: POST `/categories` с `display_mode=checklist` без boolean-поля в `fields` и PATCH, переводящий категорию в `checklist`, когда у неё нет boolean-полей, возвращают 422 с подсказкой добавить boolean-поле. Валидация в API-слое (`_ensure_checklist_has_boolean_field`), т.к. для PATCH нужны загруженные поля категории; отклонённый PATCH не меняет категорию.
+- `tests/test_categories.py` — **mod**: 3 новых теста (422 на create с не-boolean полями, 422 на create без полей, 422 на patch + проверка что категория не изменилась); 2 существующих теста обновлены под новое правило — теперь создают boolean-поле перед включением checklist.
+
+Feedback loops: pytest 138/138 green, `mypy --strict app` clean, `ruff check` + `ruff format --check` clean.
