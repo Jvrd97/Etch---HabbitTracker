@@ -16,7 +16,7 @@ router = APIRouter(prefix="/table", tags=["table"])
 MAX_RANGE_DAYS = 366
 
 
-@router.get("/", response_model=TableResponse)
+@router.get("", response_model=TableResponse)
 async def get_table(
     date_from: date = Query(
         ..., description="Start of the range, inclusive (YYYY-MM-DD)"

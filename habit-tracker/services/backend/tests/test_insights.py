@@ -51,7 +51,7 @@ class TestInsightsEndpoint:
         """api backend forced, empty ANTHROPIC_API_KEY -> feature off -> honest 503."""
         monkeypatch.setattr(settings, "LLM_BACKEND", "api")
         monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "")
-        response = await client.post("/api/v1/insights/", json={})
+        response = await client.post("/api/v1/insights", json={})
         assert response.status_code == 503
 
     async def test_happy_path_returns_and_saves_report(
@@ -61,7 +61,7 @@ class TestInsightsEndpoint:
         fake = FakeInsightsClient(report="## Trends\n\n- more sleep")
         app.dependency_overrides[get_llm_client] = lambda: fake
         try:
-            response = await client.post("/api/v1/insights/", json={"period_days": 14})
+            response = await client.post("/api/v1/insights", json={"period_days": 14})
         finally:
             app.dependency_overrides.pop(get_llm_client, None)
 
@@ -79,7 +79,7 @@ class TestInsightsEndpoint:
         """Empty body -> period_days defaults to 30."""
         app.dependency_overrides[get_llm_client] = lambda: FakeInsightsClient()
         try:
-            response = await client.post("/api/v1/insights/", json={})
+            response = await client.post("/api/v1/insights", json={})
         finally:
             app.dependency_overrides.pop(get_llm_client, None)
 
@@ -92,7 +92,7 @@ class TestInsightsEndpoint:
         """Client exception -> 502, no report row is written."""
         app.dependency_overrides[get_llm_client] = lambda: FailingInsightsClient()
         try:
-            response = await client.post("/api/v1/insights/", json={})
+            response = await client.post("/api/v1/insights", json={})
         finally:
             app.dependency_overrides.pop(get_llm_client, None)
 
@@ -127,7 +127,7 @@ class TestInsightsHistory:
             db_session, period_days=90, content="## New\n\nfresh"
         )
 
-        response = await client.get("/api/v1/insights/")
+        response = await client.get("/api/v1/insights")
         assert response.status_code == 200
         items = response.json()
         assert [item["id"] for item in items] == [second.id, first.id]
@@ -146,7 +146,7 @@ class TestInsightsHistory:
         long_content = "x" * 2000
         await _seed_report(db_session, content=long_content)
 
-        response = await client.get("/api/v1/insights/")
+        response = await client.get("/api/v1/insights")
         assert response.status_code == 200
         preview = response.json()[0]["preview"]
         assert len(preview) < len(long_content)

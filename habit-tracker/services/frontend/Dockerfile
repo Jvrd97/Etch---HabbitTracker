@@ -13,8 +13,8 @@ FROM base AS build
 COPY --from=install /temp/dev/node_modules node_modules
 COPY . .
 
-# Set environment variable for production build
-ENV NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
+# Client bundle talks to the same origin; Next rewrites /api/v1 to the backend.
+ENV NEXT_PUBLIC_API_URL=/api/v1
 RUN bun run build
 
 # Production image

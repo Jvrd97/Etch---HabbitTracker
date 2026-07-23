@@ -81,10 +81,19 @@ frontend/
 
 ## API Integration
 
-The frontend connects to the backend API via environment variables:
+The browser always calls the app's own origin under `/api/v1`; the Next server
+proxies those requests to the backend (`rewrites` in `next.config.ts`). That way
+a phone on the LAN hits the same URL as the desktop.
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+# Baked into the client bundle at build time. Default: /api/v1 (same origin).
+NEXT_PUBLIC_API_URL=/api/v1
+
+# Server-side only: where the Next server forwards /api/v1/*.
+API_PROXY_TARGET=http://localhost:8000
+
+# Dev-only: comma-separated extra hosts allowed to load /_next/* assets.
+DEV_ORIGINS=192.168.1.10,my-laptop.local
 ```
 
 All API calls are handled through the `lib/api.ts` module with:
@@ -120,7 +129,14 @@ All API calls are handled through the `lib/api.ts` module with:
 
 ## Environment Variables
 
-- `NEXT_PUBLIC_API_URL` - Backend API URL (default: http://localhost:8000/api/v1)
+- `NEXT_PUBLIC_API_URL` — API base path baked into the client bundle at build
+  time (default: `/api/v1`, i.e. same origin as the app). Set an absolute URL
+  only when the browser must bypass the Next proxy.
+- `API_PROXY_TARGET` — server-side only, backend origin the Next server forwards
+  `/api/v1/*` to (default: `http://localhost:8000`). Never `NEXT_PUBLIC_*`: the
+  browser must not see this host.
+- `DEV_ORIGINS` — dev-only, comma-separated list of extra origins allowed to load
+  `/_next/*` assets (default: empty). Add your LAN IP to develop from a phone.
 
 ## License
 

@@ -23,7 +23,7 @@ def get_llm_client() -> InsightsClient | None:
     return resolve_insights_client()
 
 
-@router.get("/", response_model=list[InsightListItem])
+@router.get("", response_model=list[InsightListItem])
 async def list_insights(db: AsyncSession = Depends(get_db)) -> list[InsightListItem]:
     """История AI-отчётов, новые сверху; content обрезан до превью."""
     reports = await insight_crud.list_ai_reports(db)
@@ -51,7 +51,7 @@ async def get_insight(report_id: int, db: AsyncSession = Depends(get_db)) -> AIR
     return report
 
 
-@router.post("/", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
 async def create_insight(
     payload: InsightRequest | None = None,
     db: AsyncSession = Depends(get_db),

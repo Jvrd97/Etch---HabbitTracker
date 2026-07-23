@@ -178,3 +178,47 @@ Backend:
 - `tests/test_insights.py` — **mod**: 503-тест теперь явно форсит `LLM_BACKEND=api` (auto-детект подхватил бы локальный claude CLI); добавлены return-аннотации (mypy strict).
 
 Feedback loops: pytest 95/95 green (TEST_DATABASE_URL → localhost:5433), ruff clean, mypy clean на всех файлах тикета (репо-wide mypy красный из-за pre-existing долга в нетронутых test_table/test_journal/test_categories/seed_data и др.). Живой прогон на dev-Mac: resolve → CliInsightsClient при пустом ключе, реальный `claude -p` вернул отчёт.
+
+## 2026-07-22 — PHASE-01/27-streak-mode-endpoint
+
+Файлов тронуто: 12 (6 new, 6 mod).
+
+Backend new:
+- `app/crud/streak.py` — **new**: расчёт стрика по всей истории категории. `is_relapse_value` (boolean true / number > 0 = срыв; number 0, пустое значение, прочие типы = чисто), чистая `compute_streak(entry_dates, relapse_dates, today)` (день без записи = чистый, current = хвостовой ран, best = максимальный) и `get_category_streak` с одним SQL-джойном Entry/EntryValue/Field.
+- `app/schemas/streak.py` — **new**: `StreakResponse` (category_id, streak_mode, current_streak, best_streak, last_relapse_date).
+- `alembic/versions/2026_07_22_1830-5b3d8c9a1f27_category_streak_mode.py` — **new**: reversible миграция `categories.streak_mode` VARCHAR(20) NOT NULL DEFAULT 'build' (SQL проверен offline через `alembic upgrade --sql`).
+- `tests/test_streak.py` — **new**: 14 тестов — create/patch streak_mode + 422 на мусор, шесть unit-кейсов compute_streak (пустая история, чистая история, срыв сбрасывает current но не best, срыв сегодня → 0, дни без записей не рвут серию, последний срыв из нескольких), 404 на несуществующую категорию, RMO-кейс «Quantity 0 не рвёт серию», срыв по number>0 и boolean true.
+
+Backend mod:
+- `app/models/category.py` — **mod**: колонка `streak_mode` (default/server_default 'build').
+- `app/schemas/category.py` — **mod**: `CategoryStreakMode = Literal["build","avoid"]`, поле в CategoryBase (дефолт build) и CategoryUpdate.
+- `app/crud/category.py` — **mod**: create_category прокидывает streak_mode.
+- `app/api/categories.py` — **mod**: `GET /categories/{id}/streak` — 404 на несуществующую категорию, иначе StreakResponse.
+- `app/crud/__init__.py`, `app/schemas/__init__.py` — **mod**: re-export streak-модуля и StreakResponse.
+
+Frontend new:
+- `lib/streak-format.ts` + `lib/streak-format.test.ts` — **new**: чистые хелперы `formatDays` (1 day / N days) и `formatLastRelapse` (ISO → «5 Mar 2026», null → «never», парс в UTC чтобы день не съезжал по таймзоне) + 4 unit-теста.
+- `components/StreakCard.tsx` — **new**: блок «Current streak / Best / Last relapse».
+
+Frontend mod:
+- `lib/api.ts` — **mod**: тип `CategoryStreakMode`, `streak_mode` в Category/CategoryCreate, интерфейс `CategoryStreak`, `categoriesAPI.getStreak`.
+- `app/categories/page.tsx` — **mod**: select «Streak mode» в редакторе категории + бейдж Avoid на карточке.
+- `app/categories/[id]/page.tsx` — **mod**: догружает стрик в общий Promise.all, StreakCard рендерится только для `streak_mode === 'avoid'`.
+- `lib/category-nav.test.ts` — **mod**: фикстура категории дополнена streak_mode (иначе tsc красный).
+
+Feedback loops: pytest 113/113 green (`TEST_DATABASE_URL=postgresql+asyncpg://habit_user:habit_pass@localhost:5433/habit_tracker_test` — пользователь `habit_user`, не `postgres`), ruff check + format clean, `mypy app` clean и `mypy tests/test_streak.py` clean (репо-wide mypy остаётся красным из-за pre-existing долга в нетронутых test_table/test_journal/test_categories/seed_data), bun test 37/37 green, tsc clean, eslint clean, next build green.
+
+## 2026-07-22 — PHASE-01/27-streak-mode-endpoint (round 2, review fixes)
+
+Файлов тронуто: 6 (2 new, 4 mod).
+
+- `app/crud/values.py` — **new**: общий слой интерпретации EAV-значений. `BOOLEAN_TRUE_VALUES`, `is_true_value(value)` и `parse_number(value, *, field_id, entry_id)`. Пустое/whitespace-значение — тихий `None` без warning: EntryForm шлёт `''` за каждое нетронутое поле, раньше это лило шум в лог на каждом расчёте стрика. Непарсящийся непустой текст по-прежнему логируется warning'ом, само значение в лог не попадает (PII-safe), только `field_id`/`entry_id`.
+- `tests/test_crud_values.py` — **new**: 14 unit-тестов — токены true (регистр/пробелы), falsy-значения, парсинг int/float/отрицательных, «пустое → None без записи в лог» (через caplog), «непарсящееся → None + ровно один warning без значения в тексте».
+- `app/crud/table.py` — **mod**: удалена локальная копия `BOOLEAN_TRUE_VALUES` и try/except ValueError в `_CellAccumulator.add`; теперь `is_true_value`/`parse_number`. Локальный `logger` и импорт `logging` больше не нужны.
+- `app/crud/streak.py` — **mod**: удалена вторая копия `BOOLEAN_TRUE_VALUES` и ручной `float()`; `is_relapse_value` сведён к `is_true_value(...)` для BOOLEAN и `(parse_number(...) or 0) > 0` для NUMBER. Граница суток зафиксирована как UTC — `datetime.now(timezone.utc).date()` вместо `date.today()`, согласованно с `lib/streak-format.ts`, который парсит ISO-дату как UTC; решение отражено в docstring `get_category_streak`.
+- `app/api/categories.py` — **mod**: docstring `GET /categories/{id}/streak` явно фиксирует, что до #23 расчёт всегда в avoid-семантике, а `streak_mode` в ответе — эхо колонки категории и на числа не влияет; для build-категорий числа бессмысленны, UI обязан прятать блок.
+- `SESSION_REVIEW.md` — **mod**: исправлен DSN в feedback loops раунда 1 — `habit_user:habit_pass@localhost:5433`, пользователь `postgres` был указан ошибочно.
+
+Feedback loops (`TEST_DATABASE_URL=postgresql+asyncpg://habit_user:habit_pass@localhost:5433/habit_tracker_test`): на момент завершения правок pytest был 131/131 green; ruff check + format clean, `mypy --strict app` clean (39 файлов), `mypy --strict tests/test_crud_values.py tests/test_streak.py` clean.
+
+ВНИМАНИЕ: во время сессии в тот же worktree параллельно писала другая сессия — в `app/api/{entries,insights,journal,table,categories}.py` появилось снятие trailing slash у роутов (`@router.get("/")` → `@router.get("")`), в `next.config.ts` — `allowedDevOrigins`. Эти изменения не мои и не входят ни в один из трёх коммитов ниже. Из-за них repo-wide pytest сейчас красный (23 падения в `test_journal`/`test_checklist`/`test_entries`/`test_insights` — тесты ещё ходят на старые URL с завершающим слэшем). Тесты в границах этого тикета зелёные: `pytest tests/test_crud_values.py tests/test_streak.py tests/test_table.py tests/test_categories.py` — 62/62 green.

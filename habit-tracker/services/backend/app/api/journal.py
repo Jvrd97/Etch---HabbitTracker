@@ -18,7 +18,7 @@ from app.schemas import (
 router = APIRouter(prefix="/journal", tags=["journal"])
 
 
-@router.get("/", response_model=JournalEntryListResponse)
+@router.get("", response_model=JournalEntryListResponse)
 async def get_journal_entries(
     skip: int = 0,
     limit: int = 100,
@@ -79,7 +79,7 @@ async def get_journal_entry(
 
 
 @router.post(
-    "/", response_model=JournalEntryResponse, status_code=status.HTTP_201_CREATED
+    "", response_model=JournalEntryResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_journal_entry(
     entry: JournalEntryCreate,

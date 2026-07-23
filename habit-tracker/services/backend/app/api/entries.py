@@ -16,7 +16,7 @@ CHECKLIST_DISPLAY_MODE = "checklist"
 router = APIRouter(prefix="/entries", tags=["entries"])
 
 
-@router.get("/", response_model=list[EntryResponse])
+@router.get("", response_model=list[EntryResponse])
 async def get_entries(
     skip: int = 0,
     limit: int = 100,
@@ -99,7 +99,7 @@ async def get_entry(
     return entry
 
 
-@router.post("/", response_model=EntryResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=EntryResponse, status_code=status.HTTP_201_CREATED)
 async def create_entry(
     entry: EntryCreate,
     db: AsyncSession = Depends(get_db),

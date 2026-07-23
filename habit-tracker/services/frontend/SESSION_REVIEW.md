@@ -122,3 +122,28 @@ Feedback loops: bun test 17/17 green, tsc --noEmit clean, eslint clean, next bui
 - `components/CategoryChart.tsx` — **mod**: диспетчер по `display_mode` — для checklist рендерится `ChecklistCategoryChart` (BarChart done-per-day, Y domain 0..N, tooltip «X of N», лаймовые бейджи стриков по полям, лайн-переключатели периода); форма — прежний line chart; кнопки периода вынесены в общий `PeriodButtons`.
 
 Feedback loops: bun test 27/27 green, tsc --noEmit clean, eslint clean, next build green.
+
+## 2026-07-22 — PHASE-01/27-category-page-nav-and-quick-add
+
+Тикет: страница категории — пейджер по категориям (стрелки + чипсы) и быстрое добавление записи в текущую категорию без ухода на Entries. Затронуто 5 файлов (3 new, 2 mod).
+
+- `lib/category-nav.ts` — **new**: чистый хелпер `categorySiblings(categories, currentId)` — соседи по порядку списка. Без wrap-around: у первой нет prev, у последней нет next. Неизвестный id или пустой список дают `{prev: null, next: null}` — удалённая категория не должна молча пролистываться в соседнюю.
+- `lib/category-nav.test.ts` — **new**: unit-тесты соседей (середина, края, единственный элемент, отсутствующий id, пустой список).
+- `components/EntryForm.tsx` — **new**: модалка создания записи, извлечённая из `app/entries/page.tsx` без изменения поведения. Новый проп `lockedCategoryId` фиксирует категорию и прячет селектор — заголовок становится «New <Category> entry».
+- `app/entries/page.tsx` — **mod**: локальный `EntryForm` удалён, страница подключает общий компонент; неиспользуемые импорты (`EntryCreate`, `EntryValueCreate`, `X`, алиас `inputClass`) убраны.
+- `app/categories/[id]/page.tsx` — **mod**: в загрузку добавлен `categoriesAPI.getAll()`; в шапке — стрелки prev/next (`CategoryPagerButton`, на краях списка disabled-заглушка) и горизонтальный ряд чипсов всех категорий с `aria-current` на активной; кнопка «New entry» открывает `EntryForm` с `lockedCategoryId`, после успеха дёргает тот же refresh-счётчик, что и правки карточек — перечитываются entries и данные графика.
+
+Feedback loops: bun test 33/33 green, tsc --noEmit clean, eslint clean, next build green. Визуальный smoke в браузере не выполнен — Chrome-расширение не подключено; проверка страницы за пользователем.
+
+## 2026-07-22 — PHASE-01/27 round 2: разделение тикетов и review-маркеров
+
+Файлов тронуто: 8 (0 new в коде, 2 new issue-файла, 6 mod).
+
+- `app/categories/[id]/page.tsx` — **mod**: `categoriesAPI.getStreak(categoryId)` в общем `Promise.all` получил `.catch(() => null)`. Раньше падение вторичного виджета отклоняло весь батч и страница (график, история записей, заголовок категории) не рендерилась вовсе; теперь деградирует до «нет блока стрика».
+- `next.config.ts` — **mod**: review-маркер `fix/mobile-api-base-url` (несуществующий тикет) заменён на `PHASE-01/30-lan-api-proxy-rewrite`.
+- `lib/api.ts` — **mod**: маркер перечисляет оба тикета — файл несёт и streak-типы (#27), и относительный дефолт `API_BASE_URL` (#30).
+- `components/EntryForm.tsx`, `lib/category-nav.ts`, `lib/category-nav.test.ts`, `app/entries/page.tsx`, `app/categories/[id]/page.tsx` — **mod**: маркеры перепривязаны с несуществующего `PHASE-01/27-category-page-nav-and-quick-add` на `PHASE-01/29-category-page-nav-and-quick-add`.
+- `issues/PHASE-01/in-work/29-category-page-nav-and-quick-add.md` — **new**: пейджер по категориям + извлечённый `EntryForm` с `lockedCategoryId`. Номер 28 занят (`backlog/28-today-avoid-card.md`).
+- `issues/PHASE-01/in-work/30-lan-api-proxy-rewrite.md` — **new**: LAN-доступ через Next-rewrite. Заведён отдельным тикетом, потому что это смена сетевой топологии: браузер → Next rewrite → backend, хост backend'а больше не попадает в бандл, Next становится звеном на горячем пути.
+
+Feedback loops: bun test 37/37 green, `tsc --noEmit` clean, eslint clean, `next build` green (10 роутов). Визуальный smoke в браузере не выполнен.

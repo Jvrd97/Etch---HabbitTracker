@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.main import app
 
-PROTECTED_URL = "/api/v1/categories/"
+PROTECTED_URL = "/api/v1/categories"
 
 
 @pytest.fixture(scope="function")
