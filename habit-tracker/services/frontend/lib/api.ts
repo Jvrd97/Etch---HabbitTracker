@@ -258,11 +258,21 @@ export interface CategoryCreate {
   fields?: FieldCreate[];
 }
 
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'select'
+  | 'duration';
+
 export interface Field {
   id: number;
   category_id: number;
   name: string;
-  field_type: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'time' | 'select';
+  field_type: FieldType;
   is_required: boolean;
   options?: string;
   order: number;
@@ -272,7 +282,7 @@ export interface Field {
 
 export interface FieldCreate {
   name: string;
-  field_type: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'time' | 'select';
+  field_type: FieldType;
   is_required?: boolean;
   options?: string;
   order?: number;

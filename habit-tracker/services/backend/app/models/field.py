@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/13-backend-uv-mypy-ruff
-# summary: Field model migrated to SQLAlchemy 2.0 Mapped[]/mapped_column (mypy --strict)
+# [review:need-review] PHASE-01/34-duration-field-type
+# summary: FieldType gained DURATION (elapsed seconds) alongside the SQLAlchemy 2.0 model
 from __future__ import annotations
 
 import enum
@@ -27,6 +27,9 @@ class FieldType(str, enum.Enum):
     DATETIME = "datetime"
     TIME = "time"
     SELECT = "select"
+    # Elapsed time a user spent (a run, a meditation), stored as whole seconds.
+    # Distinct from TIME (a clock time) and DATETIME (a timestamp).
+    DURATION = "duration"
 
 
 class Field(Base):
