@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/07-ios-categories-crud
-// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads
+// [review:need-review] PHASE-01/08-ios-entries-crud
+// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload
 import Foundation
 
 /// Category with its field definitions, as returned by `GET /api/v1/categories`.
@@ -100,7 +100,22 @@ struct EntryDTO: Codable, Identifiable, Equatable {
     let id: Int
     let categoryId: Int
     let entryDate: String
+    let notes: String?
     let values: [EntryValueDTO]
+
+    init(
+        id: Int,
+        categoryId: Int,
+        entryDate: String,
+        notes: String? = nil,
+        values: [EntryValueDTO]
+    ) {
+        self.id = id
+        self.categoryId = categoryId
+        self.entryDate = entryDate
+        self.notes = notes
+        self.values = values
+    }
 }
 
 /// Payload for `POST /api/v1/entries`.
@@ -109,6 +124,15 @@ struct EntryCreateDTO: Codable, Equatable {
     let entryDate: String
     let notes: String?
     let values: [EntryValueDTO]
+}
+
+/// Payload for `PATCH /api/v1/entries/{id}`. Every property is optional so the
+/// backend patches only what changed; the client sends `values` as a full
+/// replacement list when field values are edited.
+struct EntryUpdateDTO: Codable, Equatable {
+    let entryDate: String?
+    let notes: String?
+    let values: [EntryValueDTO]?
 }
 
 /// Payload for idempotent `PUT /api/v1/entries/checklist`.

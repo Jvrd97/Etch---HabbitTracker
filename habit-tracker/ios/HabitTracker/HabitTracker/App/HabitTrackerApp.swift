@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/07-ios-categories-crud
-// summary: app entry point — TabView with Today, Table, Categories and Settings tabs
+// [review:need-review] PHASE-01/08-ios-entries-crud
+// summary: app entry point — TabView with Today, Table, History, Categories and Settings tabs
 import SwiftUI
 
 @main
@@ -14,6 +14,10 @@ struct HabitTrackerApp: App {
                 TableView(viewModel: .live())
                     .tabItem {
                         Label("Table", systemImage: "tablecells")
+                    }
+                EntriesView(viewModel: .live())
+                    .tabItem {
+                        Label("History", systemImage: "clock.arrow.circlepath")
                     }
                 CategoriesView(viewModel: .live())
                     .tabItem {

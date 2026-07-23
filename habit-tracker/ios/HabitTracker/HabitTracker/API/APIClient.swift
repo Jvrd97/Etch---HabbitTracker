@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/07-ios-categories-crud
-// summary: URLSession async/await HTTP client; /api/v1 JSON (Today/Table + category & field CRUD)
+// [review:need-review] PHASE-01/08-ios-entries-crud
+// summary: URLSession async/await HTTP client; /api/v1 JSON (Today/Table + category & field CRUD + entries history PATCH/DELETE)
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -23,6 +23,14 @@ protocol CategoriesAPI {
     func updateCategory(id: Int, _ payload: CategoryUpdateDTO) async throws -> CategoryDTO
     func deleteCategory(id: Int) async throws
     func addField(categoryID: Int, _ payload: FieldCreateDTO) async throws -> FieldDTO
+}
+
+/// API surface needed by the Entries history screen; `APIClient` is the production implementation.
+protocol EntriesAPI {
+    func fetchCategories() async throws -> [CategoryDTO]
+    func fetchEntries(categoryId: Int?) async throws -> [EntryDTO]
+    func updateEntry(id: Int, _ payload: EntryUpdateDTO) async throws -> EntryDTO
+    func deleteEntry(id: Int) async throws
 }
 
 /// Errors surfaced by `APIClient`, suitable for user-facing mapping.
@@ -105,7 +113,7 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI, TableAPI, CategoriesAPI {
+extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI {
     static let apiV1Path = "/api/v1"
 
     func fetchCategories() async throws -> [CategoryDTO] {
@@ -145,6 +153,23 @@ extension APIClient: TodayAPI, TableAPI, CategoriesAPI {
 
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO {
         try await sendJSON(path: "/entries/checklist", method: "PUT", body: payload)
+    }
+
+    func fetchEntries(categoryId: Int?) async throws -> [EntryDTO] {
+        var query: [URLQueryItem] = []
+        if let categoryId {
+            query.append(URLQueryItem(name: "category_id", value: String(categoryId)))
+        }
+        return try await getJSON(path: "/entries", query: query)
+    }
+
+    func updateEntry(id: Int, _ payload: EntryUpdateDTO) async throws -> EntryDTO {
+        try await sendJSON(path: "/entries/\(id)", method: "PATCH", body: payload)
+    }
+
+    func deleteEntry(id: Int) async throws {
+        let url = try makeAPIURL(path: "/entries/\(id)", query: [])
+        _ = try await send(makeRequest(url: url, method: "DELETE"))
     }
 
     func fetchTable(dateFrom: String, dateTo: String) async throws -> TableResponseDTO {

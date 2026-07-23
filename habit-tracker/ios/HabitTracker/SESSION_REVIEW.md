@@ -1,5 +1,18 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/08-ios-entries-crud
+
+Экран History: история записей списком по датам с правкой и удалением целиком с телефона. `EntriesViewModel` грузит категории (для имён полей/фильтра) и всю историю записей (`GET /api/v1/entries`) одним проходом; список фильтруется по категории (`selectedCategoryId`, `filteredEntries`) и группируется по дню от новых к старым (`groupedByDate`). Правка живёт в `editDraft` (значения полей keyed by field id + заметка): `beginEditing` сеет драфт из записи, `saveEdit` шлёт `PATCH /entries/{id}` и заменяет строку в списке; ключевое свойство — при сетевой ошибке драфт НЕ сбрасывается, поэтому введённые значения не теряются (покрыто тестом). Удаление — `DELETE /entries/{id}` с обновлением списка и `confirmationDialog` в UI. UI: секционный список по датам, меню-фильтр по категориям в тулбаре, свайп-удаление с подтверждением, форма правки (поле на каждый field категории + notes). Новый таб History в `TabView`. Приёмка: опечатка «422 отжимания» правится на «42» за пару тапов (тап по записи → правка значения → Save). 10 новых unit-тестов (62 всего) зелёные на iPhone 17.
+
+Файлов тронуто: 6 (3 new, 3 mod).
+
+- `HabitTracker/Features/Entries/EntriesViewModel.swift` — new, load + фильтр + группировка по датам + edit-draft state machine (PATCH) + delete, apiProvider из Settings.
+- `HabitTracker/Features/Entries/EntriesView.swift` — new, секционный список по датам + меню-фильтр + свайп-удаление с confirmationDialog + форма правки значений/заметки.
+- `HabitTrackerTests/EntriesViewModelTests.swift` — new, 10 тестов (load, фильтр по категории, сортировка дней, правка опечатки/заметки, ошибка сети сохраняет драфт, delete happy+failure).
+- `HabitTracker/API/DTOs.swift` — mod, `EntryDTO.notes`, `EntryUpdateDTO` (PATCH payload).
+- `HabitTracker/API/APIClient.swift` — mod, протокол `EntriesAPI` + реализация (`fetchEntries(categoryId:)`, `updateEntry`, `deleteEntry`).
+- `HabitTracker/App/HabitTrackerApp.swift` — mod, таб History в TabView.
+
 ## 2026-07-23 — PHASE-01/07-ios-categories-crud
 
 Экран Categories: управление категориями и их полями целиком с телефона. `CategoriesViewModel` грузит `GET /api/v1/categories`, создаёт (`POST`), редактирует базовые свойства (`PATCH`) и удаляет (`DELETE`) категории; локальный список обновляется без перезагрузки. Ядро — чистая валидация драфта (`validate(_:)`): пустое имя категории и `select`-поле без непустых опций отклоняются до похода в сеть. Опции `select` сериализуются в JSON-массив-строку бэкенда только при сборке payload — редактор оперирует `[String]`. UI: список с цветными свотчами, форма создания с редактором полей (имя, тип, required, опции), правка базовых свойств, свайп-удаление с `confirmationDialog`. Новый таб Categories в `TabView`. Приёмка: «Приседания» с числовым полем создаётся одним запросом и появляется в Today после его загрузки. 13 новых unit-тестов (52 всего) зелёные на iPhone 17 Pro (iOS 26.3).
