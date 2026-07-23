@@ -1,5 +1,27 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/37-ios-insights
+
+Раздел Insights: AI-разбор периода с телефона + история отчётов, паритет с бэкенд-эндпоинтами #24/#25. Vertical slice через все слои (DTO/API → VM → UI + вход с Dashboard).
+
+- **DTO/API.** Три новых DTO: `InsightRequestDTO` (period_days), `InsightReportDTO` (id/period_days/content/model/created_at — полный MD-отчёт), `InsightListItemDTO` (метаданные + обрезанный preview). Новый протокол `InsightsAPI` (`fetchInsights` → `GET /insights`, `fetchInsight(id:)` → `GET /insights/{id}`, `createInsight` → `POST /insights`); `APIClient` реализует все три. `EntryMutationLive.makeAPIClient` получил опциональный `timeout` — insights-клиент собирается с щедрым таймаутом (120с), т.к. POST синхронно блокируется на LLM.
+- **ViewModel.** `InsightsViewModel`: `load()` тянет историю (`historyState` idle/loading/loaded/failure). `runAnalysis()` шлёт POST по `selectedPeriod` (`InsightPeriod` 7/30/90); при успехе — открывает отчёт и вставляет производную строку в начало истории без reload; 503 → `analysisState = .notConfigured` (честная подсказка), прочие ошибки → `.failure` (ретраится тем же вызовом). `openReport(id:)` тянет полный отчёт в `openedReport`; сбой — в `openErrorMessage`.
+- **UI.** `InsightsView`: сегмент-пикер периода + кнопка «Разобрать период» с `NeonLoader` во время анализа; экран-подсказка на 503; `DSErrorState`-ретрай на сбой истории; список прошлых отчётов карточками (тап → детальный шит). `MarkdownText` — лёгкий блочный рендер MD (заголовки/списки/абзацы, инлайн через `AttributedString`) без внешних зависимостей. Вход — новый таб Insights + quick-action на Dashboard.
+- **Tests.** 8 новых unit-тестов в `InsightsViewModelTests` (load happy/failure, run happy c проверкой period-payload и вставки в историю, 503→notConfigured, 502→failure→retry успешен, not-configured без API, openReport happy/failure). Строгий TDD (red→green).
+
+Вся сьюта (129 тестов, +8) зелёная на iPhone 17 (iOS 26.3). Сборка app-таргета (вкл. InsightsView) успешна. Живой прогон разбора ждёт `ANTHROPIC_API_KEY` на бэкенде — на моках всё зелёное.
+
+Файлов тронуто: 8 (3 new, 5 mod).
+
+- `HabitTracker/Features/Insights/InsightsViewModel.swift` — new, VM (история + разбор периода + просмотр отчёта).
+- `HabitTracker/Features/Insights/InsightsView.swift` — new, UI (пикер+кнопка+лоадер, 503-подсказка, MD-рендер, список истории).
+- `HabitTrackerTests/InsightsViewModelTests.swift` — new, 8 unit-тестов + `MockInsightsAPI`.
+- `HabitTracker/API/DTOs.swift` — mod, `InsightRequestDTO`/`InsightReportDTO`/`InsightListItemDTO`.
+- `HabitTracker/API/APIClient.swift` — mod, протокол `InsightsAPI` + реализация (`fetchInsights`/`fetchInsight`/`createInsight`).
+- `HabitTracker/Shared/EntryMutation.swift` — mod, `makeAPIClient(timeout:)` — опциональный таймаут для медленного эндпоинта.
+- `HabitTracker/App/HabitTrackerApp.swift` — mod, таб Insights + `AppTab.insights`.
+- `HabitTracker/Features/Dashboard/DashboardView.swift` — mod, quick-action «Insights» → таб.
+
 ## 2026-07-23 — PHASE-01/38-ios-avoid-streaks
 
 Avoid-стрик карточка «N дней чистый» на экране Today, паритет с web #27/#28. Vertical slice через все слои.

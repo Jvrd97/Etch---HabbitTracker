@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
-// summary: app entry point — TabView (Dashboard start tab) with programmatic tab switching; Lime Tech dark theme + lime accent applied app-wide
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/37-ios-insights
+// summary: app entry point — TabView (Dashboard start tab) with programmatic tab switching; Lime Tech dark theme + lime accent applied app-wide; Insights tab
 import SwiftUI
 import UIKit
 
@@ -11,6 +11,7 @@ enum AppTab: Hashable {
     case history
     case journal
     case categories
+    case insights
     case settings
 }
 
@@ -55,6 +56,11 @@ struct HabitTrackerApp: App {
                         Label("Categories", systemImage: "folder")
                     }
                     .tag(AppTab.categories)
+                InsightsView(viewModel: .live())
+                    .tabItem {
+                        Label("Insights", systemImage: "sparkles")
+                    }
+                    .tag(AppTab.insights)
                 SettingsView()
                     .tabItem {
                         Label("Settings", systemImage: "gear")

@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/36-ios-category-charts, PHASE-01/38-ios-avoid-streaks
-// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI exposes GET /table; TodayAPI adds GET /categories/{id}/streak
+// [review:need-review] PHASE-01/36-ios-category-charts, PHASE-01/38-ios-avoid-streaks, PHASE-01/37-ios-insights
+// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI exposes GET /table; TodayAPI adds GET /categories/{id}/streak; InsightsAPI adds POST/GET /insights
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -65,6 +65,15 @@ protocol JournalAPI {
     func createJournalEntry(_ payload: JournalEntryCreateDTO) async throws -> JournalEntryDTO
     func updateJournalEntry(id: Int, _ payload: JournalEntryUpdateDTO) async throws -> JournalEntryDTO
     func deleteJournalEntry(id: Int) async throws
+}
+
+/// API surface needed by the Insights screen; `APIClient` is the production implementation.
+/// Backs the "разбор периода" flow: run a fresh analysis (POST, generous timeout since the
+/// backend calls the LLM synchronously), list past reports, and fetch one in full.
+protocol InsightsAPI {
+    func fetchInsights() async throws -> [InsightListItemDTO]
+    func fetchInsight(id: Int) async throws -> InsightReportDTO
+    func createInsight(_ payload: InsightRequestDTO) async throws -> InsightReportDTO
 }
 
 /// Errors surfaced by `APIClient`, suitable for user-facing mapping.
@@ -147,8 +156,20 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, DashboardAPI, CategoryDetailAPI {
+extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, DashboardAPI, CategoryDetailAPI, InsightsAPI {
     static let apiV1Path = "/api/v1"
+
+    func fetchInsights() async throws -> [InsightListItemDTO] {
+        try await getJSON(path: "/insights", query: [])
+    }
+
+    func fetchInsight(id: Int) async throws -> InsightReportDTO {
+        try await getJSON(path: "/insights/\(id)", query: [])
+    }
+
+    func createInsight(_ payload: InsightRequestDTO) async throws -> InsightReportDTO {
+        try await sendJSON(path: "/insights", method: "POST", body: payload)
+    }
 
     func fetchCategories() async throws -> [CategoryDTO] {
         try await getJSON(path: "/categories", query: [])

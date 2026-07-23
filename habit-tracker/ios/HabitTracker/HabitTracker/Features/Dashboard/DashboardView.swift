@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
-// summary: Dashboard screen — Lime Tech dark restyle: KPI cards, recent-activity feed, lime quick-actions
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/37-ios-insights
+// summary: Dashboard screen — Lime Tech dark restyle: KPI cards, recent-activity feed, lime quick-actions; Insights entry point
 import SwiftUI
 
 struct DashboardView: View {
@@ -126,6 +126,12 @@ struct DashboardView: View {
                 onNavigate(.journal)
             } label: {
                 Label("Journal", systemImage: "book")
+            }
+            .buttonStyle(LimeButtonStyle(prominent: false))
+            Button {
+                onNavigate(.insights)
+            } label: {
+                Label("Insights", systemImage: "sparkles")
             }
             .buttonStyle(LimeButtonStyle(prominent: false))
         }

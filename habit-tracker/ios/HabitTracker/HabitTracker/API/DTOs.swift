@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/08-ios-entries-crud, PHASE-01/38-ios-avoid-streaks
-// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload; category streakMode + CategoryStreakDTO
+// [review:need-review] PHASE-01/08-ios-entries-crud, PHASE-01/38-ios-avoid-streaks, PHASE-01/37-ios-insights
+// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload; category streakMode + CategoryStreakDTO; AI insight request/report/list-item
 import Foundation
 
 /// Category with its field definitions, as returned by `GET /api/v1/categories`.
@@ -288,6 +288,32 @@ struct CategoryStreakDTO: Codable, Equatable {
     let currentStreak: Int
     let bestStreak: Int
     let lastRelapseDate: String?
+}
+
+/// Payload for `POST /api/v1/insights` — the trailing period to analyse, in days.
+struct InsightRequestDTO: Codable, Equatable {
+    let periodDays: Int
+}
+
+/// A persisted AI insight report, as returned by `POST /api/v1/insights` and
+/// `GET /api/v1/insights/{id}`. `content` is the full Markdown report; `createdAt`
+/// is the backend's ISO-8601 timestamp string (decoded as-is, like other DTO dates).
+struct InsightReportDTO: Codable, Identifiable, Equatable {
+    let id: Int
+    let periodDays: Int
+    let content: String
+    let model: String
+    let createdAt: String
+}
+
+/// One row of the report history (`GET /api/v1/insights`): metadata plus a truncated
+/// content preview (the backend caps the preview; `content` itself is not sent here).
+struct InsightListItemDTO: Codable, Identifiable, Equatable {
+    let id: Int
+    let periodDays: Int
+    let model: String
+    let createdAt: String
+    let preview: String
 }
 
 enum APIJSONCoding {

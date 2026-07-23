@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/35-ios-category-detail
-// summary: Shared entry-mutation surface — EntryEditDraft/LoadState/DayGroup models, EntryMutating protocol+extension (group/edit/delete/requireAPI), live() APIClient factory
+// [review:need-review] PHASE-01/35-ios-category-detail, PHASE-01/37-ios-insights
+// summary: Shared entry-mutation surface — EntryEditDraft/LoadState/DayGroup models, EntryMutating protocol+extension (group/edit/delete/requireAPI), live() APIClient factory (optional timeout override)
 import Foundation
 import os
 
@@ -154,7 +154,9 @@ enum EntryMutationLive {
         subsystem: "com.habittracker.app", category: "EntryMutationLive"
     )
 
-    static func makeAPIClient() -> APIClient? {
+    /// `timeout` defaults to the client's standard budget; callers that hit a slow
+    /// synchronous endpoint (e.g. AI insights, which block on the LLM) pass a longer one.
+    static func makeAPIClient(timeout: TimeInterval = APIClient.defaultTimeout) -> APIClient? {
         let address = UserDefaults.standard
             .string(forKey: SettingsViewModel.serverAddressDefaultsKey) ?? ""
         guard let baseURL = APIClient.makeBaseURL(from: address) else {
@@ -175,7 +177,8 @@ enum EntryMutationLive {
                     )
                     return nil
                 }
-            }
+            },
+            timeout: timeout
         )
     }
 }
