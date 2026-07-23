@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry
-// summary: Codable DTOs mirroring backend schemas — typed FieldTypeDTO enum, checklist upsert payload
+// [review:need-review] PHASE-01/07-ios-categories-crud
+// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads
 import Foundation
 
 /// Category with its field definitions, as returned by `GET /api/v1/categories`.
@@ -23,7 +23,7 @@ struct CategoryDTO: Codable, Identifiable, Equatable {
 
 /// Field type mirroring the backend `FieldType` enum; `unknown` keeps decoding
 /// forward-compatible when the server introduces a type this client predates.
-enum FieldTypeDTO: Equatable {
+enum FieldTypeDTO: Equatable, Hashable {
     case text
     case number
     case boolean
@@ -118,6 +118,37 @@ struct ChecklistUpsertDTO: Codable, Equatable {
     let categoryId: Int
     let entryDate: String
     let values: [String: Bool]
+}
+
+/// Payload for creating a field, either standalone (`POST /categories/{id}/fields`)
+/// or nested inside `CategoryCreateDTO`. `options` is the backend's JSON-array string
+/// for `select` fields (e.g. `["good","bad"]`), and nil for every other field type.
+struct FieldCreateDTO: Codable, Equatable {
+    let name: String
+    let fieldType: FieldTypeDTO
+    let isRequired: Bool
+    let defaultValue: String?
+    let options: String?
+    let order: Int
+}
+
+/// Payload for `POST /api/v1/categories`. Fields are created in the same request so a
+/// whole category (e.g. "Приседания" with a number field) is one round trip.
+struct CategoryCreateDTO: Codable, Equatable {
+    let name: String
+    let color: String?
+    let icon: String?
+    let displayMode: String
+    let fields: [FieldCreateDTO]
+}
+
+/// Payload for `PATCH /api/v1/categories/{id}`. Every property is optional so the
+/// backend patches only what changed; nil keys are still sent but map to no-op nulls.
+struct CategoryUpdateDTO: Codable, Equatable {
+    let name: String?
+    let color: String?
+    let icon: String?
+    let displayMode: String?
 }
 
 /// Category metadata for the table view, as returned by `GET /api/v1/table`.

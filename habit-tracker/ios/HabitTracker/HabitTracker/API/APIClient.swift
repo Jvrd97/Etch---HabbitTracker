@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry
-// summary: URLSession async/await HTTP client; /api/v1 JSON requests (categories, entries POST + checklist PUT) as TodayAPI
+// [review:need-review] PHASE-01/07-ios-categories-crud
+// summary: URLSession async/await HTTP client; /api/v1 JSON (Today/Table + category & field CRUD)
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -14,6 +14,15 @@ protocol TodayAPI {
 protocol TableAPI {
     func fetchTable(dateFrom: String, dateTo: String) async throws -> TableResponseDTO
     func fetchEntries(categoryId: Int, date: String) async throws -> [EntryDTO]
+}
+
+/// API surface needed by the Categories screen; `APIClient` is the production implementation.
+protocol CategoriesAPI {
+    func fetchCategories() async throws -> [CategoryDTO]
+    func createCategory(_ payload: CategoryCreateDTO) async throws -> CategoryDTO
+    func updateCategory(id: Int, _ payload: CategoryUpdateDTO) async throws -> CategoryDTO
+    func deleteCategory(id: Int) async throws
+    func addField(categoryID: Int, _ payload: FieldCreateDTO) async throws -> FieldDTO
 }
 
 /// Errors surfaced by `APIClient`, suitable for user-facing mapping.
@@ -96,11 +105,28 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI, TableAPI {
+extension APIClient: TodayAPI, TableAPI, CategoriesAPI {
     static let apiV1Path = "/api/v1"
 
     func fetchCategories() async throws -> [CategoryDTO] {
         try await getJSON(path: "/categories", query: [])
+    }
+
+    func createCategory(_ payload: CategoryCreateDTO) async throws -> CategoryDTO {
+        try await sendJSON(path: "/categories", method: "POST", body: payload)
+    }
+
+    func updateCategory(id: Int, _ payload: CategoryUpdateDTO) async throws -> CategoryDTO {
+        try await sendJSON(path: "/categories/\(id)", method: "PATCH", body: payload)
+    }
+
+    func deleteCategory(id: Int) async throws {
+        let url = try makeAPIURL(path: "/categories/\(id)", query: [])
+        _ = try await send(makeRequest(url: url, method: "DELETE"))
+    }
+
+    func addField(categoryID: Int, _ payload: FieldCreateDTO) async throws -> FieldDTO {
+        try await sendJSON(path: "/categories/\(categoryID)/fields", method: "POST", body: payload)
     }
 
     func fetchEntries(startDate: String, endDate: String) async throws -> [EntryDTO] {

@@ -1,5 +1,18 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/07-ios-categories-crud
+
+Экран Categories: управление категориями и их полями целиком с телефона. `CategoriesViewModel` грузит `GET /api/v1/categories`, создаёт (`POST`), редактирует базовые свойства (`PATCH`) и удаляет (`DELETE`) категории; локальный список обновляется без перезагрузки. Ядро — чистая валидация драфта (`validate(_:)`): пустое имя категории и `select`-поле без непустых опций отклоняются до похода в сеть. Опции `select` сериализуются в JSON-массив-строку бэкенда только при сборке payload — редактор оперирует `[String]`. UI: список с цветными свотчами, форма создания с редактором полей (имя, тип, required, опции), правка базовых свойств, свайп-удаление с `confirmationDialog`. Новый таб Categories в `TabView`. Приёмка: «Приседания» с числовым полем создаётся одним запросом и появляется в Today после его загрузки. 13 новых unit-тестов (52 всего) зелёные на iPhone 17 Pro (iOS 26.3).
+
+Файлов тронуто: 6 (3 new, 3 mod).
+
+- `HabitTracker/Features/Categories/CategoriesViewModel.swift` — new, драфты + чистая валидация + load/create/update/delete state machine, apiProvider из Settings.
+- `HabitTracker/Features/Categories/CategoriesView.swift` — new, список со свотчами + форма с редактором полей + confirmationDialog удаления.
+- `HabitTrackerTests/CategoriesViewModelTests.swift` — new, 13 тестов (load, валидация пустого имени / select без опций, create c маппингом payload + JSON-опции, update/delete happy+failure).
+- `HabitTracker/API/DTOs.swift` — mod, write-payload DTO (`FieldCreateDTO`/`CategoryCreateDTO`/`CategoryUpdateDTO`), `FieldTypeDTO: Hashable` для Picker.
+- `HabitTracker/API/APIClient.swift` — mod, протокол `CategoriesAPI` + реализация (`createCategory`/`updateCategory`/`deleteCategory`/`addField`).
+- `HabitTracker/App/HabitTrackerApp.swift` — mod, таб Categories в TabView.
+
 ## 2026-07-23 — PHASE-01/06-ios-table-view
 
 Экран Table: табличный вид «дни × привычки». `TableViewModel` грузит `GET /api/v1/table` за последние 30 дней (по умолчанию), поддерживает подгрузку более старых страниц (`loadOlder`, мерж по датам без дублей) и достаёт исходные записи ячейки через `GET /entries?category_id&start_date&end_date`. Ядро — чистый маппинг `TableGrid(from: TableResponseDTO)`: колонка = категория (через primary field), строка = день (сортировка по убыванию даты), пустые дни/ячейки → `.empty`. UI: `Grid` с горизонтальным скроллом колонок, тап по непустой ячейке открывает `TableCellDetailSheet` с записями за день, из которых сложилось агрегированное значение. Новый таб Table в `TabView`. 14 новых unit-тестов (39 всего) зелёные на iPhone 17 Pro (iOS 26.2).
