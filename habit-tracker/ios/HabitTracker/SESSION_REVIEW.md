@@ -1,5 +1,24 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/38-ios-avoid-streaks
+
+Avoid-стрик карточка «N дней чистый» на экране Today, паритет с web #27/#28. Vertical slice через все слои.
+
+- **DTO/API.** `CategoryDTO` получил поле `streakMode` (значения `avoid`/`build`, дефолт `build` для обратной совместимости со старыми call-site и бэкендами, не отдающими поле) + computed `isAvoid`. Новый `CategoryStreakDTO` (`categoryId`/`streakMode`/`currentStreak`/`bestStreak`/`lastRelapseDate`). Протокол `TodayAPI` расширен `fetchStreak(categoryId:)` → `GET /api/v1/categories/{id}/streak`; `APIClient` реализует метод.
+- **ViewModel.** `TodayViewModel.load()` после категорий/записей грузит стрики только для avoid-категорий, конкурентно через `withTaskGroup`; сбой одного стрик-запроса деградирует до «нет карточки» (`try?`), не роняя уже успешный Today. `streaks: [Int: CategoryStreakDTO]` + аксессор `streak(forCategory:)`. Новый `logRelapse(categoryID:count:notes:)`: POST записи с `count` в первое number-поле (по `order`) + опциональная заметка, затем перезагрузка стрика этой категории (current обнуляется, best бэкенд сохраняет). Хелпер `countField(forCategory:)`. Нет number-поля → видимая ошибка, без POST.
+- **UI.** `TodayView.row(for:)` разводит avoid-категории (карточка со стриком) и обычные (tap-to-log). `avoidStreakCard`: крупный лаймовый «N days clean» через `DS.Typography.hero`, `Best: M days` ниже, маленькая кнопка «It happened» → `RelapseSheet` (счётчик «сколько» + заметка, focus на счётчике, Save валидирует непустой count). После сохранения sheet закрывается, карточка показывает обнулённый current.
+- **Tests.** 4 новых unit-теста в `TodayViewModelTests`: стрик грузится только для avoid, сбой стрика деградирует без падения load, relapse обнуляет current и сохраняет best, relapse без number-поля даёт ошибку.
+
+Вся сьюта (121 тест, +4) зелёная на iPhone 17 Pro (iOS 26.3). Сборка app-таргета успешна.
+
+Файлов тронуто: 5 (0 new, 5 mod).
+
+- `HabitTracker/API/DTOs.swift` — mod, `CategoryDTO.streakMode`/`isAvoid` + `CategoryStreakDTO`.
+- `HabitTracker/API/APIClient.swift` — mod, `TodayAPI.fetchStreak` + реализация `GET /categories/{id}/streak`.
+- `HabitTracker/Features/Today/TodayViewModel.swift` — mod, загрузка стриков + `logRelapse`/`countField`/`streak(forCategory:)`.
+- `HabitTracker/Features/Today/TodayView.swift` — mod, avoid-стрик карточка + `RelapseSheet`.
+- `HabitTrackerTests/TodayViewModelTests.swift` — mod, 4 стрик/relapse-теста + mock `fetchStreak`.
+
 ## 2026-07-23 — PHASE-01/36-ios-category-charts
 
 Графики на экране категории через Swift Charts, паритет с web `lib/chart-data.ts` / `chart-utils.ts`. Вся доменная логика вынесена в чистый, UI-free модуль `CategoryChart` (enum-namespace): серии по number/time-полям с юнитами и распределением по двум осям (первый юнит — левая ось, остальные — правая), парсинг агрегированных ячеек (`time` → минуты), per-day точки с null-гэпами, кумулятивная свёртка (running sum, null не ломает тотал, вход не мутируется), checklist-бары «X из N» и per-field стрики (сегодня-pending как в вебе), нарезка по периодам 7/30/90/all и годовое окно фетча `GET /table`. Модуль покрыт 24 unit-тестами в паритете с web-тестами.

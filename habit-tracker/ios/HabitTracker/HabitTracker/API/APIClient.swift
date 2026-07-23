@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/36-ios-category-charts
-// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI now also exposes GET /table for the category chart
+// [review:need-review] PHASE-01/36-ios-category-charts, PHASE-01/38-ios-avoid-streaks
+// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI exposes GET /table; TodayAPI adds GET /categories/{id}/streak
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -8,6 +8,7 @@ protocol TodayAPI {
     func fetchEntries(startDate: String, endDate: String) async throws -> [EntryDTO]
     func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO
+    func fetchStreak(categoryId: Int) async throws -> CategoryStreakDTO
 }
 
 /// API surface needed by the Table screen; `APIClient` is the production implementation.
@@ -186,6 +187,10 @@ extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, 
 
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO {
         try await sendJSON(path: "/entries/checklist", method: "PUT", body: payload)
+    }
+
+    func fetchStreak(categoryId: Int) async throws -> CategoryStreakDTO {
+        try await getJSON(path: "/categories/\(categoryId)/streak", query: [])
     }
 
     func fetchEntries(categoryId: Int?) async throws -> [EntryDTO] {

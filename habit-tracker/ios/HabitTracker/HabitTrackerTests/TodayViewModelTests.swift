@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry
-// summary: unit tests for TodayViewModel — load, save success/failure, checklist upsert routing
+// [review:need-review] PHASE-01/05-ios-today-quick-entry, PHASE-01/38-ios-avoid-streaks
+// summary: unit tests for TodayViewModel — load, save success/failure, checklist upsert routing, avoid-streak load + relapse reset
 import XCTest
 @testable import HabitTracker
 
@@ -9,9 +9,11 @@ final class MockTodayAPI: TodayAPI {
     var entriesResult: Result<[EntryDTO], Error> = .success([])
     var createEntryResult: Result<EntryDTO, Error>?
     var upsertChecklistResult: Result<EntryDTO, Error>?
+    var streakResults: [Int: Result<CategoryStreakDTO, Error>] = [:]
     private(set) var fetchedEntryRanges: [(start: String, end: String)] = []
     private(set) var createdEntries: [EntryCreateDTO] = []
     private(set) var upsertedChecklists: [ChecklistUpsertDTO] = []
+    private(set) var fetchedStreakIDs: [Int] = []
 
     func fetchCategories() async throws -> [CategoryDTO] {
         try categoriesResult.get()
@@ -33,6 +35,14 @@ final class MockTodayAPI: TodayAPI {
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO {
         upsertedChecklists.append(payload)
         guard let result = upsertChecklistResult else {
+            throw APIClientError.invalidResponse
+        }
+        return try result.get()
+    }
+
+    func fetchStreak(categoryId: Int) async throws -> CategoryStreakDTO {
+        fetchedStreakIDs.append(categoryId)
+        guard let result = streakResults[categoryId] else {
             throw APIClientError.invalidResponse
         }
         return try result.get()
@@ -60,7 +70,11 @@ final class TodayViewModelTests: XCTestCase {
     }
 
     private func makeCategory(
-        id: Int, name: String, fields: [FieldDTO], displayMode: String = "form"
+        id: Int,
+        name: String,
+        fields: [FieldDTO],
+        displayMode: String = "form",
+        streakMode: String = "build"
     ) -> CategoryDTO {
         CategoryDTO(
             id: id,
@@ -68,8 +82,24 @@ final class TodayViewModelTests: XCTestCase {
             icon: nil,
             color: nil,
             displayMode: displayMode,
+            streakMode: streakMode,
             isActive: true,
             fields: fields
+        )
+    }
+
+    private func makeStreak(
+        categoryID: Int,
+        current: Int,
+        best: Int,
+        lastRelapse: String?
+    ) -> CategoryStreakDTO {
+        CategoryStreakDTO(
+            categoryId: categoryID,
+            streakMode: "avoid",
+            currentStreak: current,
+            bestStreak: best,
+            lastRelapseDate: lastRelapse
         )
     }
 
@@ -221,6 +251,120 @@ final class TodayViewModelTests: XCTestCase {
 
         XCTAssertEqual(api.upsertedChecklists.count, 2)
         XCTAssertEqual(viewModel.entries(forCategory: 2), [updated])
+    }
+
+    func testLoadFetchesStreakForAvoidCategoriesOnly() async {
+        let api = MockTodayAPI()
+        let rmo = makeCategory(
+            id: 1,
+            name: "RMO",
+            fields: [makeNumberField(id: 10, name: "Count")],
+            streakMode: "avoid"
+        )
+        let pushups = makeCategory(
+            id: 2,
+            name: "Pushups",
+            fields: [makeNumberField(id: 20, name: "Count")],
+            streakMode: "build"
+        )
+        api.categoriesResult = .success([rmo, pushups])
+        api.streakResults[1] = .success(
+            makeStreak(categoryID: 1, current: 7, best: 12, lastRelapse: "2026-07-16")
+        )
+
+        let viewModel = makeViewModel(api: api)
+        await viewModel.load()
+
+        XCTAssertEqual(api.fetchedStreakIDs, [1], "only avoid categories load a streak")
+        XCTAssertEqual(viewModel.streak(forCategory: 1)?.currentStreak, 7)
+        XCTAssertEqual(viewModel.streak(forCategory: 1)?.bestStreak, 12)
+        XCTAssertNil(viewModel.streak(forCategory: 2), "build categories have no streak card")
+    }
+
+    func testLoadStreakFailureDegradesToNoCardWithoutFailingLoad() async {
+        let api = MockTodayAPI()
+        let rmo = makeCategory(
+            id: 1,
+            name: "RMO",
+            fields: [makeNumberField(id: 10, name: "Count")],
+            streakMode: "avoid"
+        )
+        api.categoriesResult = .success([rmo])
+        api.streakResults[1] = .failure(APIClientError.unexpectedStatus(500))
+
+        let viewModel = makeViewModel(api: api)
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.state, .loaded)
+        XCTAssertNil(viewModel.streak(forCategory: 1))
+    }
+
+    func testLogRelapseResetsCurrentStreakWhileKeepingBest() async {
+        let api = MockTodayAPI()
+        let rmo = makeCategory(
+            id: 1,
+            name: "RMO",
+            fields: [makeNumberField(id: 10, name: "Count")],
+            streakMode: "avoid"
+        )
+        api.categoriesResult = .success([rmo])
+        api.streakResults[1] = .success(
+            makeStreak(categoryID: 1, current: 7, best: 12, lastRelapse: "2026-07-16")
+        )
+
+        let viewModel = makeViewModel(api: api)
+        await viewModel.load()
+        XCTAssertEqual(viewModel.streak(forCategory: 1)?.currentStreak, 7)
+
+        // The relapse entry posts the count, then the streak reload returns the
+        // reset current streak with the best preserved.
+        api.createEntryResult = .success(
+            EntryDTO(
+                id: 300,
+                categoryId: 1,
+                entryDate: Self.fixedToday,
+                notes: "slipped",
+                values: [EntryValueDTO(fieldId: 10, value: "3")]
+            )
+        )
+        api.streakResults[1] = .success(
+            makeStreak(categoryID: 1, current: 0, best: 12, lastRelapse: Self.fixedToday)
+        )
+
+        let logged = await viewModel.logRelapse(categoryID: 1, count: "3", notes: "slipped")
+
+        XCTAssertTrue(logged)
+        let payload = api.createdEntries.last
+        XCTAssertEqual(payload?.categoryId, 1)
+        XCTAssertEqual(payload?.entryDate, Self.fixedToday)
+        XCTAssertEqual(payload?.notes, "slipped")
+        XCTAssertEqual(payload?.values, [EntryValueDTO(fieldId: 10, value: "3")])
+        XCTAssertEqual(viewModel.streak(forCategory: 1)?.currentStreak, 0)
+        XCTAssertEqual(viewModel.streak(forCategory: 1)?.bestStreak, 12)
+        XCTAssertEqual(viewModel.streak(forCategory: 1)?.lastRelapseDate, Self.fixedToday)
+        XCTAssertNil(viewModel.saveErrorMessage)
+    }
+
+    func testLogRelapseWithoutNumberFieldSetsErrorAndReturnsFalse() async {
+        let api = MockTodayAPI()
+        let boolOnly = makeCategory(
+            id: 1,
+            name: "RMO",
+            fields: [makeBooleanField(id: 10, name: "Did it")],
+            streakMode: "avoid"
+        )
+        api.categoriesResult = .success([boolOnly])
+        api.streakResults[1] = .success(
+            makeStreak(categoryID: 1, current: 1, best: 1, lastRelapse: nil)
+        )
+
+        let viewModel = makeViewModel(api: api)
+        await viewModel.load()
+        let logged = await viewModel.logRelapse(categoryID: 1, count: "3", notes: nil)
+
+        XCTAssertFalse(logged)
+        XCTAssertTrue(api.createdEntries.isEmpty)
+        XCTAssertEqual(viewModel.saveErrorMessage, TodayViewModel.noCountFieldMessage)
     }
 
     func testLoadFailureSetsFailureMessageWithoutCrash() async {

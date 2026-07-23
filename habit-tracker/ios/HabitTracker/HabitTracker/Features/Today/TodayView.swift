@@ -1,10 +1,11 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass
-// summary: Today screen — Lime Tech dark restyle: habit cards + quick-entry sheet with oversized value
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/38-ios-avoid-streaks
+// summary: Today screen — habit cards + quick-entry sheet; avoid categories show "N days clean" streak card + "It happened" relapse form
 import SwiftUI
 
 struct TodayView: View {
     @StateObject private var viewModel: TodayViewModel
     @State private var selectedCategory: CategoryDTO?
+    @State private var relapseCategory: CategoryDTO?
 
     init(viewModel: TodayViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -21,6 +22,9 @@ struct TodayView: View {
         }
         .sheet(item: $selectedCategory) { category in
             QuickEntrySheet(category: category, viewModel: viewModel)
+        }
+        .sheet(item: $relapseCategory) { category in
+            RelapseSheet(category: category, viewModel: viewModel)
         }
     }
 
@@ -50,7 +54,7 @@ struct TodayView: View {
             ScrollView {
                 VStack(spacing: DS.Spacing.md) {
                     ForEach(viewModel.categories) { category in
-                        habitCard(category)
+                        row(for: category)
                     }
                 }
                 .padding(DS.Spacing.lg)
@@ -59,6 +63,71 @@ struct TodayView: View {
                 await viewModel.load()
             }
         }
+    }
+
+    /// Avoid categories with a loaded streak show the "N days clean" card; every
+    /// other category keeps the tap-to-log habit card.
+    @ViewBuilder
+    private func row(for category: CategoryDTO) -> some View {
+        if category.isAvoid, let streak = viewModel.streak(forCategory: category.id) {
+            avoidStreakCard(category, streak: streak)
+        } else {
+            habitCard(category)
+        }
+    }
+
+    /// Oversized lime "N days clean" readout with the best streak underneath and a
+    /// small "It happened" button that opens the relapse form.
+    private func avoidStreakCard(
+        _ category: CategoryDTO, streak: CategoryStreakDTO
+    ) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                HStack(spacing: DS.Spacing.sm) {
+                    if let icon = category.icon, !icon.isEmpty {
+                        Text(icon)
+                            .font(DS.Typography.section)
+                    }
+                    Text(category.name)
+                        .font(DS.Typography.card)
+                        .foregroundStyle(DS.Palette.textPrimary)
+                    Spacer()
+                }
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(TodayView.formatDays(streak.currentStreak))
+                        .font(DS.Typography.hero)
+                        .foregroundStyle(DS.Palette.lime)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    Text("clean")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Palette.textSecondary)
+                }
+                Text("Best: \(TodayView.formatDays(streak.bestStreak))")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Palette.textSecondary)
+                Button {
+                    relapseCategory = category
+                } label: {
+                    Text("It happened")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Palette.danger)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .overlay(
+                            Capsule().stroke(DS.Palette.danger.opacity(0.5), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Streak length with the correct English day form, e.g. "1 day" / "42 days".
+    /// Mirrors the web `formatDays` so both clients read identically.
+    static func formatDays(_ days: Int) -> String {
+        "\(days) \(days == 1 ? "day" : "days")"
     }
 
     private func habitCard(_ category: CategoryDTO) -> some View {
@@ -280,6 +349,87 @@ struct QuickEntrySheet: View {
             !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         if await viewModel.saveEntry(categoryID: category.id, values: nonEmptyValues) {
+            dismiss()
+        }
+    }
+}
+
+/// Relapse form for an avoid category ("It happened"): a count ("how much") and an
+/// optional note. Saving posts the entry and reloads the streak, so the card shows
+/// the reset current streak when the sheet dismisses.
+struct RelapseSheet: View {
+    let category: CategoryDTO
+    @ObservedObject var viewModel: TodayViewModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var count = ""
+    @State private var notes = ""
+    @State private var isSaving = false
+    @FocusState private var countFocused: Bool
+
+    private var countFieldName: String {
+        viewModel.countField(forCategory: category.id)?.name ?? "How much"
+    }
+
+    private var canSave: Bool {
+        // Backend counts a relapse only when the value is a positive number;
+        // anything else would dismiss the sheet without resetting the streak.
+        guard let value = Double(count.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
+        return value > 0 && !isSaving
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(countFieldName, text: $count)
+                        .keyboardType(.decimalPad)
+                        .focused($countFocused)
+                    TextField("Note (optional)", text: $notes, axis: .vertical)
+                }
+                .listRowBackground(DS.Palette.card)
+                if let message = viewModel.saveErrorMessage {
+                    Section {
+                        Text(message)
+                            .foregroundStyle(DS.Palette.danger)
+                    }
+                    .listRowBackground(DS.Palette.card)
+                }
+            }
+            .dsScreenBackground()
+            .navigationTitle(category.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task { await save() }
+                    }
+                    .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                viewModel.saveErrorMessage = nil
+                countFocused = true
+            }
+        }
+        .presentationDetents([.fraction(0.4), .medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        let trimmedCount = count.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let logged = await viewModel.logRelapse(
+            categoryID: category.id,
+            count: trimmedCount,
+            notes: trimmedNotes.isEmpty ? nil : trimmedNotes
+        )
+        if logged {
             dismiss()
         }
     }

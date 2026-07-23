@@ -1,23 +1,57 @@
-// [review:need-review] PHASE-01/08-ios-entries-crud
-// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload
+// [review:need-review] PHASE-01/08-ios-entries-crud, PHASE-01/38-ios-avoid-streaks
+// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload; category streakMode + CategoryStreakDTO
 import Foundation
 
 /// Category with its field definitions, as returned by `GET /api/v1/categories`.
 struct CategoryDTO: Codable, Identifiable, Equatable {
     /// Backend `display_mode` value that switches Today to the checklist upsert flow.
     static let checklistDisplayMode = "checklist"
+    /// Backend `streak_mode` value that switches Today to the avoid-streak card.
+    static let avoidStreakMode = "avoid"
+    /// Default `streak_mode` for categories that don't track an avoid streak.
+    static let buildStreakMode = "build"
 
     let id: Int
     let name: String
     let icon: String?
     let color: String?
     let displayMode: String
+    let streakMode: String
     let isActive: Bool
     let fields: [FieldDTO]
+
+    /// `streakMode` is defaulted for call-site convenience only. Decoding still
+    /// requires the key: the backend always serializes streak_mode (Pydantic
+    /// default "build"), so no decode fallback is provided here.
+    init(
+        id: Int,
+        name: String,
+        icon: String?,
+        color: String?,
+        displayMode: String,
+        streakMode: String = CategoryDTO.buildStreakMode,
+        isActive: Bool,
+        fields: [FieldDTO]
+    ) {
+        self.id = id
+        self.name = name
+        self.icon = icon
+        self.color = color
+        self.displayMode = displayMode
+        self.streakMode = streakMode
+        self.isActive = isActive
+        self.fields = fields
+    }
 
     /// Checklist categories save via idempotent `PUT /entries/checklist`, not generic POST.
     var isChecklist: Bool {
         displayMode == Self.checklistDisplayMode
+    }
+
+    /// Avoid categories surface a "N days clean" streak card on Today instead of a
+    /// running tally; the streak numbers come from `GET /categories/{id}/streak`.
+    var isAvoid: Bool {
+        streakMode == Self.avoidStreakMode
     }
 }
 
@@ -244,6 +278,16 @@ struct JournalEntryUpdateDTO: Codable, Equatable {
     let entryDate: String?
     let mood: String?
     let tags: String?
+}
+
+/// Streak numbers of an avoid category, as returned by `GET /api/v1/categories/{id}/streak`.
+/// `lastRelapseDate` is the backend `YYYY-MM-DD` string, nil when the streak was never broken.
+struct CategoryStreakDTO: Codable, Equatable {
+    let categoryId: Int
+    let streakMode: String
+    let currentStreak: Int
+    let bestStreak: Int
+    let lastRelapseDate: String?
 }
 
 enum APIJSONCoding {

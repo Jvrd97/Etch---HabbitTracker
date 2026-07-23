@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry
-// summary: Today screen state — loads categories + entries; POST for form, idempotent checklist PUT
+// [review:need-review] PHASE-01/05-ios-today-quick-entry, PHASE-01/38-ios-avoid-streaks
+// summary: Today screen state — loads categories + entries + avoid streaks; POST for form, idempotent checklist PUT; logRelapse posts count + reloads streak
 import Foundation
 import os
 
@@ -16,9 +16,14 @@ final class TodayViewModel: ObservableObject {
     @Published private(set) var state: LoadState = .idle
     @Published private(set) var categories: [CategoryDTO] = []
     @Published private(set) var todayEntries: [EntryDTO] = []
+    /// Avoid-streak numbers keyed by category id, populated for avoid categories
+    /// during `load()`. A category missing here has no streak to show (either it
+    /// is not an avoid category, or its streak request failed and degraded away).
+    @Published private(set) var streaks: [Int: CategoryStreakDTO] = [:]
     @Published var saveErrorMessage: String?
 
     static let notConfiguredMessage = "Set the server address in Settings"
+    static let noCountFieldMessage = "This habit has no number field to log"
 
     private let apiProvider: () -> TodayAPI?
     private let dateFormatter: DateFormatter
@@ -102,6 +107,7 @@ final class TodayViewModel: ObservableObject {
             let (fetchedCategories, fetchedEntries) = try await (categoriesTask, entriesTask)
             categories = fetchedCategories.filter(\.isActive)
             todayEntries = fetchedEntries
+            streaks = await loadStreaks(for: categories, api: api)
             state = .loaded
         } catch let error as APIClientError {
             state = .failure(error.userMessage)
@@ -110,9 +116,89 @@ final class TodayViewModel: ObservableObject {
         }
     }
 
+    /// Fetches streaks for every avoid category concurrently. A single failed
+    /// streak request degrades to "no card" (mirrors the web page) rather than
+    /// failing the whole Today load, which already succeeded.
+    private func loadStreaks(
+        for categories: [CategoryDTO], api: TodayAPI
+    ) async -> [Int: CategoryStreakDTO] {
+        let avoidCategories = categories.filter(\.isAvoid)
+        guard !avoidCategories.isEmpty else { return [:] }
+        return await withTaskGroup(of: (Int, CategoryStreakDTO?).self) { group in
+            for category in avoidCategories {
+                group.addTask {
+                    (category.id, try? await api.fetchStreak(categoryId: category.id))
+                }
+            }
+            var result: [Int: CategoryStreakDTO] = [:]
+            for await (categoryID, streak) in group {
+                if let streak {
+                    result[categoryID] = streak
+                }
+            }
+            return result
+        }
+    }
+
     /// Today's entries belonging to the given category.
     func entries(forCategory categoryID: Int) -> [EntryDTO] {
         todayEntries.filter { $0.categoryId == categoryID }
+    }
+
+    /// Avoid-streak numbers for the category, or nil when there is no card to show.
+    func streak(forCategory categoryID: Int) -> CategoryStreakDTO? {
+        streaks[categoryID]
+    }
+
+    /// Records a relapse ("случилось") for an avoid category: posts an entry whose
+    /// primary number field carries `count`, plus optional `notes`, then reloads
+    /// that category's streak so the card shows the reset current streak (best is
+    /// preserved by the backend). Returns true on success.
+    func logRelapse(categoryID: Int, count: String, notes: String?) async -> Bool {
+        saveErrorMessage = nil
+        guard let api = apiProvider() else {
+            saveErrorMessage = Self.notConfiguredMessage
+            return false
+        }
+        guard let countField = countField(forCategory: categoryID) else {
+            saveErrorMessage = Self.noCountFieldMessage
+            return false
+        }
+        do {
+            let saved = try await api.createEntry(
+                EntryCreateDTO(
+                    categoryId: categoryID,
+                    entryDate: todayString,
+                    notes: notes,
+                    values: [EntryValueDTO(fieldId: countField.id, value: count)]
+                )
+            )
+            if let index = todayEntries.firstIndex(where: { $0.id == saved.id }) {
+                todayEntries[index] = saved
+            } else {
+                todayEntries.append(saved)
+            }
+            if let refreshed = try? await api.fetchStreak(categoryId: categoryID) {
+                streaks[categoryID] = refreshed
+            }
+            return true
+        } catch let error as APIClientError {
+            saveErrorMessage = error.userMessage
+            return false
+        } catch {
+            saveErrorMessage = "Unexpected error"
+            return false
+        }
+    }
+
+    /// The number field a relapse count is written to — the first number field in
+    /// display order, matching the "how much" slot on the relapse form.
+    func countField(forCategory categoryID: Int) -> FieldDTO? {
+        categories
+            .first { $0.id == categoryID }?
+            .fields
+            .sorted { ($0.order, $0.id) < ($1.order, $1.id) }
+            .first { $0.fieldType == .number }
     }
 
     /// Saves today's values for the category. Form categories create a new entry
