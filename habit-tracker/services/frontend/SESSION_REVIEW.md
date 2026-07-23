@@ -1,5 +1,23 @@
 # Session Review Log
 
+## 2026-07-23 — PHASE-01/10-ios-dashboard (round 2, web-часть паритета)
+
+Раунд 2 по ревью. Веб-фронтенд затронут ради паритета счётчиков и ленты с новым iOS-дашбордом. Кода не менялось сверх того, что уже было заведено в раунде 1, — фиксируется продуктовое решение и подтверждается корректность.
+
+Продуктовое решение по счётчику Entries (был блокер: расхождение iOS vs web). Выбран **вариант (b)** — прежнее web-поведение признано багом: карточка Entries считала `entries.length` от лимитированной выборки `getAll({limit:5})`, из-за чего при >5 записях число капалось на 5, тогда как iOS показывал реальный total. Исправлено на реальный total: `app/page.tsx` грузит `entriesAPI.getAll()` без лимита (бэкенд-дефолт `limit=100`, тот же путь, что и iOS `fetchEntries(categoryId: nil)`), а `entriesCount` = длина полного списка. iOS оставлен как есть. Теперь обе платформы при >5 записях показывают одинаковое число (совпадают вплоть до бэкенд-дефолта 100). `journal.total` берётся из ответа независимо от лимита выборки, поэтому журнальная карточка не затронута.
+
+Порядок ленты recent-activity (был warning). Бэкенд `GET /entries` отдаёт `order_by(Entry.entry_date.desc())` по умолчанию — это совпадает с date-desc. Дополнительно обе платформы пересортировывают ленту на клиенте по (`entry_date` desc, `id` desc на равных датах) — `computeDashboardStats` на web и `DashboardViewModel.aggregate` на iOS, — поэтому порядок и разрыв тай-брейков идентичны вне зависимости от порядка тай-брейка на бэке. Ленты не расходятся.
+
+UX-паритет ленты (был warning). Обе платформы показывают одинаковый набор: `Entry #<id>`, сырой `entry_date` и счётчик `N values`. Web не показывает имя категории или форматированные значения — довидение iOS до web-презентации не требуется, паритет уже есть.
+
+Файлов тронуто: 3 (2 new, 1 mod) — все от раунда 1, здесь только подтверждены.
+
+- `lib/dashboard-stats.ts` — **new** (round 1): чистая агрегация — `entriesCount` = реальная длина списка (не лимит-срез), лента newest-first (date desc, id desc) с капом `RECENT_ENTRIES_LIMIT = 5`. Паритет с `DashboardViewModel.aggregate`.
+- `lib/dashboard-stats.test.ts` — **new** (round 1): 4 unit-теста (реальный total при 12 записях, кап+порядок ленты с тай-брейками, отсутствие мутации входа, пустой список).
+- `app/page.tsx` — **mod** (round 1): `entriesAPI.getAll()` без лимита + `computeDashboardStats`; карточка Entries и hero-кольцо используют реальный total.
+
+Feedback loops: bun test 48/48 green, `tsc --noEmit` clean, eslint clean.
+
 ## 2026-07-22 — PHASE-01/25-ai-reports-history
 
 Тикет: история AI-отчётов (`/insights`) и выбор периода разбора на Dashboard. Frontend-часть: затронуто 5 файлов (2 new, 3 mod); backend-часть описана в `services/backend/SESSION_REVIEW.md`.

@@ -1,9 +1,10 @@
 'use client';
-// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
-// summary: Dashboard — shared Markdown renderer for AI разбор; Log entry links now open /entries?new=1 (form opens in 1 tap)
+// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist, PHASE-01/10-ios-dashboard
+// summary: Dashboard — shared Markdown renderer for AI разбор; Log entry links open /entries?new=1; Entries KPI now shows real total (fixed limit:5 cap) via computeDashboardStats, parity with iOS
 
 import { useEffect, useState } from 'react';
 import { categoriesAPI, entriesAPI, insightsAPI, journalAPI, AIReport, Entry } from '@/lib/api';
+import { computeDashboardStats } from '@/lib/dashboard-stats';
 import Markdown from '@/components/Markdown';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
@@ -92,18 +93,16 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
 
+      // Fetch the full entries list (backend default limit) so the Entries KPI
+      // reflects the real total; the recent-activity feed is sliced client-side.
+      // journal.total is the backend total regardless of the fetch limit.
       const [categories, entries, journal] = await Promise.all([
         categoriesAPI.getAll(),
-        entriesAPI.getAll({ limit: 5 }),
+        entriesAPI.getAll(),
         journalAPI.getAll({ limit: 5 }),
       ]);
 
-      setStats({
-        categoriesCount: categories.length,
-        entriesCount: entries.length,
-        journalCount: journal.total,
-        recentEntries: entries,
-      });
+      setStats(computeDashboardStats(categories.length, entries, journal.total));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
     } finally {

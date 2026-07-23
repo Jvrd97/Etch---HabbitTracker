@@ -33,6 +33,15 @@ protocol EntriesAPI {
     func deleteEntry(id: Int) async throws
 }
 
+/// API surface needed by the Dashboard screen; `APIClient` is the production implementation.
+/// Reuses existing list endpoints — the dashboard derives its counters and recent-activity
+/// feed from unfiltered categories/entries plus the journal total (no dedicated stats endpoint).
+protocol DashboardAPI {
+    func fetchCategories() async throws -> [CategoryDTO]
+    func fetchEntries(categoryId: Int?) async throws -> [EntryDTO]
+    func fetchJournalList() async throws -> JournalListResponseDTO
+}
+
 /// API surface needed by the Journal screen; `APIClient` is the production implementation.
 protocol JournalAPI {
     func fetchJournalEntries() async throws -> [JournalEntryDTO]
@@ -121,7 +130,7 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI {
+extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI, DashboardAPI {
     static let apiV1Path = "/api/v1"
 
     func fetchCategories() async throws -> [CategoryDTO] {
@@ -201,9 +210,12 @@ extension APIClient: TodayAPI, TableAPI, CategoriesAPI, EntriesAPI, JournalAPI {
         )
     }
 
+    func fetchJournalList() async throws -> JournalListResponseDTO {
+        try await getJSON(path: "/journal", query: [])
+    }
+
     func fetchJournalEntries() async throws -> [JournalEntryDTO] {
-        let response: JournalListResponseDTO = try await getJSON(path: "/journal", query: [])
-        return response.items
+        try await fetchJournalList().items
     }
 
     func createJournalEntry(_ payload: JournalEntryCreateDTO) async throws -> JournalEntryDTO {

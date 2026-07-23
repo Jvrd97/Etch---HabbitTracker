@@ -1,5 +1,17 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/10-ios-dashboard
+
+Экран Dashboard: стартовый таб с паритетом веб-дашборда — счётчики категорий/записей/журнала и лента последней активности. `DashboardViewModel` грузит три существующих list-endpoint параллельно (`async let`: `GET /categories`, `GET /entries` без фильтра, `GET /journal`) и агрегирует их чистым статик-методом `aggregate(categories:entries:journalTotal:)` в `Stats` (три счётчика + `recentEntries`). Recent-лента сортируется от новых к старым (дата desc, id desc на равных датах) и обрезается до `recentEntriesLimit = 5`. Отдельного stats-endpoint не заводим (объёмы одного пользователя позволяют) — как и предписывает тикет. Журнальный счётчик берёт `total` из ответа: в `APIClient` добавлен `fetchJournalList() -> JournalListResponseDTO`, а прежний `fetchJournalEntries()` теперь тонкая обёртка над ним (без дублирования пути). UI: `List` с секциями Overview (счётчики), Recent activity (записи или «Nothing here yet») и Quick actions (переходы на Today/Journal). Навигация между табами — программное переключение через `TabView(selection:)` и enum `AppTab`; Dashboard — стартовый таб, отдаёт замыкание `onNavigate`. Приёмка: те же счётчики и активность, что и на вебе. 4 новых unit-теста (77 всего) зелёные на iPhone 17.
+
+Файлов тронуто: 5 (3 new, 2 mod).
+
+- `HabitTracker/Features/Dashboard/DashboardViewModel.swift` — new, параллельный load трёх endpoint + чистая агрегация `Stats`, apiProvider из Settings.
+- `HabitTracker/Features/Dashboard/DashboardView.swift` — new, секционный список (счётчики + лента + quick actions) с pull-to-refresh, `onNavigate` в другие табы.
+- `HabitTrackerTests/DashboardViewModelTests.swift` — new, 4 теста (агрегация счётчиков + фильтр nil, recent newest-first+cap, ошибка сети, not-configured).
+- `HabitTracker/API/APIClient.swift` — mod, протокол `DashboardAPI` + `fetchJournalList()` (реюз в `fetchJournalEntries`).
+- `HabitTracker/App/HabitTrackerApp.swift` — mod, enum `AppTab` + `TabView(selection:)`, Dashboard как стартовый таб.
+
 ## 2026-07-23 — PHASE-01/09-ios-journal
 
 Экран Journal: дневник «как прошёл день» с телефона. `JournalViewModel` грузит ленту (`GET /api/v1/journal`, распаковывает `items` из `JournalListResponseDTO`) и сортирует от новых к старым (по дате, затем по id). Черновик записи живёт в published-полях (`draftTitle`/`draftContent`/`draftDate`/`draftMood`/`draftTags`); `createEntry` требует непустой `content` (иначе ошибка без похода в сеть), опускает пустые title/tags/mood, нормализует теги и шлёт `POST /journal`, вставляя результат в начало ленты; при сетевой ошибке черновик НЕ сбрасывается. Удаление — `DELETE /journal/{id}` с обновлением ленты. Ядро парсинга тегов вынесено в чистый `JournalTags` (`parse`/`normalize`): строка «работа, достижения ,, проект » → `работа,достижения,проект`, пустой ввод → nil. `JournalMood` — enum опций настроения с эмодзи-лейблами, raw-value совпадают со строками бэкенда. UI: лента (дата, настроение, заголовок, превью текста на 3 строки, теги-чипы), compose-шит (title, дата, пикер настроения, многострочный текст, теги через запятую), свайп-удаление с `confirmationDialog`. Новый таб Journal в `TabView`. Приёмка: запись «как прошёл день» с настроением создаётся с телефона (`POST /journal`) и видна в веб-админке. 11 новых unit-тестов (73 всего) зелёные на iPhone 17.
