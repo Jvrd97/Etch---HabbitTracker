@@ -1,10 +1,9 @@
 # [review:need-review] PHASE-01/adhoc-ci-precommit
-# summary: CI — backend (ruff, mypy --strict, pytest vs postgres) and frontend (build)
+# summary: CI — backend (ruff, mypy --strict, pytest vs postgres); frontend (lint, bun unit tests, build); runs on all pushes + PRs
 name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -51,5 +50,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install
         run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+      - name: Unit tests
+        run: bun test lib/
       - name: Typecheck and build
         run: bun run build
