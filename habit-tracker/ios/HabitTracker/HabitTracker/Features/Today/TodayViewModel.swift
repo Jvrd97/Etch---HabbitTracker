@@ -1,5 +1,6 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry, PHASE-01/38-ios-avoid-streaks, PHASE-01/11-ios-read-cache
-// summary: Today screen state — loads categories + entries + avoid streaks through the read cache (serves last snapshot + offline flag when the network is down); POST for form, idempotent checklist PUT; logRelapse posts count + reloads streak
+// [review:need-review] PHASE-01/05-ios-today-quick-entry, PHASE-01/38-ios-avoid-streaks, PHASE-01/11-ios-read-cache, PHASE-01/12-ios-offline-queue
+// summary: Today screen state — loads categories + entries + avoid streaks through the read cache (serves last snapshot + offline flag when the network is down); POST for form, idempotent checklist PUT; a form POST that fails offline is queued to the outbox and shown as a pending entry, with the badge bound reactively to the outbox so a background flush clears it (and its optimistic rows) without a manual refresh; logRelapse posts count + reloads streak
+import Combine
 import Foundation
 
 /// The categories/entries/streaks a single Today load produced, cached as one unit so
@@ -30,6 +31,9 @@ final class TodayViewModel: ObservableObject {
     /// When non-nil the screen is showing cached data because the last load fell back
     /// to the read cache; the value is the timestamp of that cached snapshot.
     @Published private(set) var offlineAsOf: Date?
+    /// How many form entries are queued in the outbox waiting to reach the server —
+    /// drives the "N записей ждут отправки" badge on Today.
+    @Published private(set) var pendingUploadCount: Int = 0
     @Published var saveErrorMessage: String?
 
     static let notConfiguredMessage = "Set the server address in Settings"
@@ -39,42 +43,88 @@ final class TodayViewModel: ObservableObject {
 
     private let apiProvider: () -> TodayAPI?
     private let cache: ReadThroughCache
+    private let outbox: OutboxQueue?
     private let dateFormatter: DateFormatter
     private let now: () -> Date
+    /// Next synthetic id for an optimistic pending entry. Negative and decreasing so
+    /// queued rows never collide with server ids (or each other) in the list.
+    private var nextPendingEntryID = -1
+    /// Live subscription to the outbox depth so the badge (and the optimistic rows it
+    /// represents) stay in sync with a background flush without a manual refresh.
+    private var cancellables: Set<AnyCancellable> = []
 
     /// Primary init: the provider is re-evaluated on every load, so Settings
     /// changes (server address / API key) take effect without an app restart.
     init(
         apiProvider: @escaping () -> TodayAPI?,
         cacheStore: CacheStore = InMemoryCacheStore(),
+        outbox: OutboxQueue? = nil,
         timeZone: TimeZone = .current,
         now: @escaping () -> Date = Date.init
     ) {
         self.apiProvider = apiProvider
         self.cache = ReadThroughCache(store: cacheStore, now: now)
+        self.outbox = outbox
         self.now = now
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = timeZone
         formatter.dateFormat = "yyyy-MM-dd"
         self.dateFormatter = formatter
+        self.pendingUploadCount = outbox?.pendingCount ?? 0
+        bindOutbox()
+    }
+
+    /// Subscribes to the outbox's published depth. Every change — an offline enqueue or a
+    /// background flush drained by `NWPathMonitor` — flows here, so the badge is never a
+    /// one-shot snapshot. When the depth drops (a flush succeeded) the optimistic pending
+    /// rows are reconciled away so the list and badge clear together. The outbox publishes
+    /// on the main actor (it is `@MainActor`), so the value is delivered there.
+    private func bindOutbox() {
+        guard let outbox else { return }
+        outbox.$pendingCount
+            .sink { [weak self] count in
+                MainActor.assumeIsolated {
+                    self?.reconcilePending(newCount: count)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Applies a new outbox depth to the badge and, when the queue shrank (a flush sent
+    /// queued creates), drops the now-obsolete optimistic rows and reloads so the real
+    /// server entries take their place — the badge and the list clear in the same step.
+    private func reconcilePending(newCount: Int) {
+        let drained = newCount < pendingUploadCount
+        pendingUploadCount = newCount
+        guard drained else { return }
+        todayEntries.removeAll { $0.isPending }
+        Task { await load() }
     }
 
     /// Convenience init with a fixed API (used by unit tests).
     convenience init(
         api: TodayAPI,
         cacheStore: CacheStore = InMemoryCacheStore(),
+        outbox: OutboxQueue? = nil,
         timeZone: TimeZone = .current,
         now: @escaping () -> Date = Date.init
     ) {
-        self.init(apiProvider: { api }, cacheStore: cacheStore, timeZone: timeZone, now: now)
+        self.init(
+            apiProvider: { api },
+            cacheStore: cacheStore,
+            outbox: outbox,
+            timeZone: timeZone,
+            now: now
+        )
     }
 
     /// Builds the production view model from stored Settings (UserDefaults + Keychain).
     static func live() -> TodayViewModel {
         TodayViewModel(
             apiProvider: { EntryMutationLive.makeAPIClient() },
-            cacheStore: ReadCacheLive.shared
+            cacheStore: ReadCacheLive.shared,
+            outbox: OutboxLive.shared
         )
     }
 
@@ -105,6 +155,8 @@ final class TodayViewModel: ObservableObject {
                 )
             }
             apply(outcome)
+            // The badge tracks the outbox reactively (see `bindOutbox`); no manual
+            // snapshot is needed here — a background flush already updated it.
             state = .loaded
         } catch let error as APIClientError {
             state = .failure(error.userMessage)
@@ -115,18 +167,26 @@ final class TodayViewModel: ObservableObject {
 
     /// Publishes a snapshot, recording whether it came from the network or the cache.
     private func apply(_ outcome: CacheOutcome<TodaySnapshot>) {
-        let snapshot: TodaySnapshot
+        // Optimistic rows for still-queued offline creates. They live only in
+        // `todayEntries`, never in the read cache, so a stale snapshot would drop them.
+        let pendingRows = todayEntries.filter(\.isPending)
         switch outcome {
         case .fresh(let value):
-            snapshot = value
             offlineAsOf = nil
+            categories = value.categories
+            // Online: the server is the source of truth. Any optimistic rows are
+            // reconciled by `reconcilePending` once the outbox flush deletes them.
+            todayEntries = value.entries
+            streaks = value.streaks
         case .stale(let value, let updatedAt):
-            snapshot = value
             offlineAsOf = updatedAt
+            categories = value.categories
+            // Offline: the cached snapshot predates the queued creates, so merge the
+            // optimistic pending rows on top — a queued entry stays visible in the list,
+            // matching the badge, instead of vanishing until the network returns.
+            todayEntries = value.entries + pendingRows
+            streaks = value.streaks
         }
-        categories = snapshot.categories
-        todayEntries = snapshot.entries
-        streaks = snapshot.streaks
     }
 
     /// Fetches streaks for every avoid category concurrently. A single failed
@@ -240,16 +300,24 @@ final class TodayViewModel: ObservableObject {
                     )
                 )
             } else {
-                saved = try await api.createEntry(
-                    EntryCreateDTO(
-                        categoryId: categoryID,
-                        entryDate: todayString,
-                        notes: nil,
-                        values: values
-                            .sorted { $0.key < $1.key }
-                            .map { EntryValueDTO(fieldId: $0.key, value: $0.value) }
-                    )
+                let payload = EntryCreateDTO(
+                    categoryId: categoryID,
+                    entryDate: todayString,
+                    notes: nil,
+                    values: values
+                        .sorted { $0.key < $1.key }
+                        .map { EntryValueDTO(fieldId: $0.key, value: $0.value) }
                 )
+                do {
+                    saved = try await api.createEntry(payload)
+                } catch let error as APIClientError where error.isConnectivity {
+                    // Offline: don't lose "42 pushups". Queue it and show it optimistically
+                    // so the user sees their entry and the pending badge, not an error.
+                    if let outbox {
+                        return enqueueOffline(payload, outbox: outbox)
+                    }
+                    throw error
+                }
             }
             // The checklist upsert can return an entry we already loaded — replace
             // it in place so the list never shows duplicates.
@@ -266,5 +334,24 @@ final class TodayViewModel: ObservableObject {
             saveErrorMessage = "Unexpected error"
             return false
         }
+    }
+
+    /// Queues a create that failed offline and mirrors it into the list as a pending
+    /// row (synthetic negative id), so the entry is visible immediately and the badge
+    /// reflects the outbox depth. Returns true — the save is not lost, just deferred.
+    private func enqueueOffline(_ payload: EntryCreateDTO, outbox: OutboxQueue) -> Bool {
+        outbox.enqueue(payload)
+        todayEntries.append(
+            EntryDTO(
+                id: nextPendingEntryID,
+                categoryId: payload.categoryId,
+                entryDate: payload.entryDate,
+                notes: payload.notes,
+                values: payload.values
+            )
+        )
+        nextPendingEntryID -= 1
+        // The badge updates reactively via `bindOutbox` when `enqueue` bumps the depth.
+        return true
     }
 }

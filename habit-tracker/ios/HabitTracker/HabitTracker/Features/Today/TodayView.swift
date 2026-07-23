@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/38-ios-avoid-streaks, PHASE-01/11-ios-read-cache
-// summary: Today screen — habit cards + quick-entry sheet; avoid categories show "N days clean" streak card + "It happened" relapse form; offline banner atop when data came from the read cache
+// [review:need-review] PHASE-01/32-ios-lime-tech-design-pass, PHASE-01/38-ios-avoid-streaks, PHASE-01/11-ios-read-cache, PHASE-01/12-ios-offline-queue
+// summary: Today screen — habit cards + quick-entry sheet; avoid categories show "N days clean" streak card + "It happened" relapse form; offline banner + "N entries waiting to send" outbox badge atop when data came from the read cache / a save was queued offline
 import SwiftUI
 
 struct TodayView: View {
@@ -16,6 +16,9 @@ struct TodayView: View {
             VStack(spacing: 0) {
                 if let offlineAsOf = viewModel.offlineAsOf {
                     OfflineBanner(updatedAt: offlineAsOf)
+                }
+                if viewModel.pendingUploadCount > 0 {
+                    PendingUploadsBadge(count: viewModel.pendingUploadCount)
                 }
                 content
             }
@@ -149,6 +152,9 @@ struct TodayView: View {
                         .font(DS.Typography.card)
                         .foregroundStyle(DS.Palette.textPrimary)
                     Spacer()
+                    if hasPendingEntry(category) {
+                        PendingRowTag()
+                    }
                     Text(todaySummary(for: category))
                         .font(DS.Typography.card)
                         .foregroundStyle(hasEntries(category) ? DS.Palette.lime : DS.Palette.textSecondary)
@@ -165,6 +171,13 @@ struct TodayView: View {
         !viewModel.entries(forCategory: category.id).isEmpty
     }
 
+    /// True when at least one of the category's rows is an offline-queued create that
+    /// has not reached the server yet — drives the per-card "pending" tag so a queued
+    /// entry reads as pending in the list, not as an already-saved value.
+    private func hasPendingEntry(_ category: CategoryDTO) -> Bool {
+        viewModel.entries(forCategory: category.id).contains(where: \.isPending)
+    }
+
     /// Compact right-side summary: today's single value, entry count, or a dash.
     private func todaySummary(for category: CategoryDTO) -> String {
         let entries = viewModel.entries(forCategory: category.id)
@@ -176,6 +189,50 @@ struct TodayView: View {
             return value
         }
         return "\(entries.count) entries"
+    }
+}
+
+/// Per-card "pending" tag: marks a habit whose value came from an offline-queued create
+/// still waiting to sync, so the row reads as pending rather than as a saved value.
+struct PendingRowTag: View {
+    var body: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "arrow.up.circle")
+            Text("Pending")
+        }
+        .font(DS.Typography.caption)
+        .foregroundStyle(DS.Palette.textSecondary)
+        .padding(.vertical, 2)
+        .padding(.horizontal, DS.Spacing.sm)
+        .overlay(
+            Capsule().stroke(DS.Palette.textSecondary.opacity(0.4), lineWidth: 1)
+        )
+    }
+}
+
+/// Slim badge shown above Today when the outbox holds creates that could not reach the
+/// server yet (airplane mode). Tells the user their taps are safe, just not synced.
+struct PendingUploadsBadge: View {
+    let count: Int
+
+    /// "1 entry waiting to send" / "3 entries waiting to send".
+    static func caption(for count: Int) -> String {
+        "\(count) \(count == 1 ? "entry" : "entries") waiting to send"
+    }
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "arrow.up.circle")
+            Text(PendingUploadsBadge.caption(for: count))
+                .font(DS.Typography.caption)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(DS.Palette.lime)
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DS.Palette.card)
     }
 }
 

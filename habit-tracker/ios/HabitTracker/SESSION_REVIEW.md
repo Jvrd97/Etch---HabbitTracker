@@ -270,3 +270,15 @@ Avoid-стрик карточка «N дней чистый» на экране 
 - `HabitTrackerTests/KeychainStoreTests.swift` — new, 5 тестов round-trip/overwrite/delete.
 - `HabitTrackerTests/SettingsViewModelTests.swift` — new, 5 тестов (Keychain-only ключ, state machine).
 - `../../.gitignore` — mod, игнор сгенерированного `.xcodeproj`, DerivedData, xcuserdata.
+
+## 2026-07-23 — PHASE-01/12-ios-offline-queue
+
+Оффлайн-очередь для `POST /entries`: запись «42 отжимания» без сети не теряется. SwiftData-модель `PendingEntryRecord` (payload/created_at/attempts/status), протокол `OutboxStore` (in-memory + SwiftData), `OutboxQueue` — enqueue при connectivity-ошибке, flush в порядке enqueue с delete-after-success (запись уходит на сервер ровно один раз, дубликатов нет), авто-флаш по `NWPathMonitor` и при старте приложения. TodayViewModel POST-ит через очередь: оффлайн-сохранение кладётся в outbox и показывается оптимистичной pending-записью + бейдж «N entries waiting to send». Все 151 unit-тест зелёные (8 новых), сборка и тесты прогнаны в Симуляторе (iPhone 17, iOS 26.3).
+
+Файлов тронуто: 5 (2 new, 3 mod) + pbxproj.
+
+- `HabitTracker/Cache/OutboxQueue.swift` — new, PendingEntry-модель, OutboxStore (in-memory + SwiftData), OutboxQueue (enqueue/flush/startAutoFlush), NWPathNetworkMonitor, OutboxLive.
+- `HabitTracker/Features/Today/TodayViewModel.swift` — mod, saveEntry POST через outbox при оффлайне, pendingUploadCount, enqueueOffline.
+- `HabitTracker/Features/Today/TodayView.swift` — mod, PendingUploadsBadge над списком Today.
+- `HabitTrackerTests/OutboxQueueTests.swift` — new, 8 тестов (enqueue→flush, no-duplicate, порядок, connectivity-stop, авто-флаш, SwiftData round-trip, TodayViewModel offline/online).
+- `HabitTracker.xcodeproj/project.pbxproj` — mod, регистрация OutboxQueue.swift + OutboxQueueTests.swift.

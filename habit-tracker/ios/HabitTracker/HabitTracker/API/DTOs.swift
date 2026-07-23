@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/08-ios-entries-crud, PHASE-01/38-ios-avoid-streaks, PHASE-01/37-ios-insights
-// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload; category streakMode + CategoryStreakDTO; AI insight request/report/list-item
+// [review:need-review] PHASE-01/08-ios-entries-crud, PHASE-01/38-ios-avoid-streaks, PHASE-01/37-ios-insights, PHASE-01/12-ios-offline-queue
+// summary: Codable DTOs mirroring backend schemas — FieldTypeDTO, checklist upsert, category/field write payloads, entry notes + update payload; category streakMode + CategoryStreakDTO; AI insight request/report/list-item; EntryDTO.isPending marks offline-queued optimistic rows
 import Foundation
 
 /// Category with its field definitions, as returned by `GET /api/v1/categories`.
@@ -150,6 +150,12 @@ struct EntryDTO: Codable, Identifiable, Equatable {
         self.notes = notes
         self.values = values
     }
+
+    /// True for an optimistic row that only exists locally: it was queued in the
+    /// offline outbox and has not yet been accepted by the server. The offline queue
+    /// mints such rows with a negative synthetic id (server ids are always positive),
+    /// so `id < 0` is the "still waiting to send" marker the UI renders as pending.
+    var isPending: Bool { id < 0 }
 }
 
 /// Payload for `POST /api/v1/entries`.
