@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
-# summary: POST/PATCH reject display_mode=checklist without a boolean field (422)
+# [review:need-review] PHASE-01/35-category-fields-update-web-ux
+# summary: PATCH checklist validation uses incoming fields; fields synced via crud
 from typing import cast, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -188,8 +188,15 @@ async def update_category(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Category with id {category_id} not found",
             )
+        # Валидируем результирующий набор полей: если PATCH сам переопределяет
+        # поля, boolean может добавляться тем же запросом, что и checklist.
+        effective_fields = (
+            category_update.fields
+            if category_update.fields is not None
+            else existing.fields
+        )
         _ensure_checklist_has_boolean_field(
-            [field.field_type for field in existing.fields]
+            [field.field_type for field in effective_fields]
         )
 
     category = await category_crud.update_category(db, category_id, category_update)

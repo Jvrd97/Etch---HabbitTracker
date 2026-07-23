@@ -1,6 +1,6 @@
 'use client';
-// [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
-// summary: editor hints that checklist mode requires a boolean field (matches API 422 rule)
+// [review:need-review] PHASE-01/35-category-fields-update-web-ux
+// summary: field ids in update payload, add-field-at-bottom + base field, sticky footer, list view
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -14,7 +14,10 @@ import {
 } from '@/lib/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import { Plus, Pencil, Trash2, FolderKanban, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, FolderKanban, X, LayoutGrid, List } from 'lucide-react';
+
+type ViewMode = 'cards' | 'list';
+const VIEW_STORAGE_KEY = 'categoriesView';
 
 const DEFAULT_CATEGORY_COLOR = '#B8FF36';
 
@@ -37,10 +40,23 @@ export default function CategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
 
   useEffect(() => {
     loadCategories();
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (saved === 'list' || saved === 'cards') setViewMode(saved);
   }, []);
+
+  const changeView = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_STORAGE_KEY, mode);
+  };
+
+  const openEdit = (category: Category) => {
+    setEditingCategory(category);
+    setShowForm(true);
+  };
 
   const loadCategories = async () => {
     try {
@@ -77,16 +93,46 @@ export default function CategoriesPage() {
           </h1>
           <p className="mt-2 text-text-secondary">Manage your tracking categories</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingCategory(null);
-            setShowForm(true);
-          }}
-          className="flex items-center gap-2 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)]"
-        >
-          <Plus className="w-5 h-5" strokeWidth={2} />
-          <span className="hidden sm:inline">New category</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {categories.length > 0 && (
+            <div className="flex items-center gap-1 p-1 bg-surface border border-white/10 rounded-2xl">
+              <button
+                onClick={() => changeView('cards')}
+                aria-label="Card view"
+                aria-pressed={viewMode === 'cards'}
+                className={`p-2 rounded-xl transition-colors duration-200 ${
+                  viewMode === 'cards'
+                    ? 'bg-lime/15 text-lime'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => changeView('list')}
+                aria-label="List view"
+                aria-pressed={viewMode === 'list'}
+                className={`p-2 rounded-xl transition-colors duration-200 ${
+                  viewMode === 'list'
+                    ? 'bg-lime/15 text-lime'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <List className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setEditingCategory(null);
+              setShowForm(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)]"
+          >
+            <Plus className="w-5 h-5" strokeWidth={2} />
+            <span className="hidden sm:inline">New category</span>
+          </button>
+        </div>
       </div>
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
@@ -121,6 +167,57 @@ export default function CategoriesPage() {
           >
             Create category
           </button>
+        </div>
+      ) : viewMode === 'list' ? (
+        <div className="space-y-2">
+          {categories.map((category) => (
+            <div
+              key={category.id}
+              className="flex items-center gap-3 bg-card border border-white/5 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-white/10"
+            >
+              <Link
+                href={`/categories/${category.id}`}
+                aria-label={`Open ${category.name} chart`}
+                className="flex items-center gap-3 min-w-0 flex-1 group"
+              >
+                <span
+                  className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: `${category.color || DEFAULT_CATEGORY_COLOR}1f` }}
+                >
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: category.color || DEFAULT_CATEGORY_COLOR }}
+                  />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-text-primary font-medium truncate transition-colors duration-200 group-hover:text-lime">
+                    {category.name}
+                  </span>
+                  <span className="block text-xs text-text-disabled truncate">
+                    {category.fields.length} fields · {DISPLAY_MODE_LABELS[category.display_mode]}
+                    {category.group ? ` · ${category.group}` : ''}
+                    {category.is_active ? '' : ' · Inactive'}
+                  </span>
+                </span>
+              </Link>
+              <div className="flex gap-1 flex-shrink-0">
+                <button
+                  onClick={() => openEdit(category)}
+                  aria-label="Edit category"
+                  className="p-2 rounded-full text-text-secondary hover:text-lime hover:bg-lime/10 transition-colors duration-200"
+                >
+                  <Pencil className="w-4 h-4" strokeWidth={2} />
+                </button>
+                <button
+                  onClick={() => handleDelete(category.id)}
+                  aria-label="Delete category"
+                  className="p-2 rounded-full text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors duration-200"
+                >
+                  <Trash2 className="w-4 h-4" strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -246,13 +343,17 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
   const [group, setGroup] = useState(category?.group ?? '');
   const [isActive, setIsActive] = useState(category?.is_active ?? true);
   const [fields, setFields] = useState<FieldCreate[]>(
-    category?.fields.map(f => ({
-      name: f.name,
-      field_type: f.field_type,
-      is_required: f.is_required,
-      options: f.options,
-      order: f.order,
-    })) || []
+    category
+      ? category.fields.map((f) => ({
+          id: f.id, // carry id so the backend updates in place, keeping history
+          name: f.name,
+          field_type: f.field_type,
+          is_required: f.is_required,
+          options: f.options,
+          order: f.order,
+        }))
+      : // New category starts with one blank field so there's nothing to add first.
+        [{ name: '', field_type: 'text', is_required: false, order: 0 }]
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -285,7 +386,10 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
         streak_mode: streakMode,
         group: group.trim() || null,
         is_active: isActive,
-        fields: fields.filter(f => f.name), // Only include fields with names
+        // Only fields with names; re-index order by position so add/remove stays tidy.
+        fields: fields
+          .filter((f) => f.name.trim())
+          .map((f, i) => ({ ...f, order: i })),
       };
 
       if (category) {
@@ -318,7 +422,7 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="category-form" onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && <ErrorAlert message={error} />}
 
           <div>
@@ -427,19 +531,9 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
 
           {/* Fields Section */}
           <div>
-            <div className="flex justify-between items-center mb-4">
-              <label className="block text-[13px] font-medium text-text-secondary">
-                Fields
-              </label>
-              <button
-                type="button"
-                onClick={addField}
-                className="inline-flex items-center gap-1.5 text-sm text-lime hover:text-green-secondary font-medium transition-colors duration-200"
-              >
-                <Plus className="w-4 h-4" strokeWidth={2} />
-                Add field
-              </button>
-            </div>
+            <label className="block text-[13px] font-medium text-text-secondary mb-4">
+              Fields
+            </label>
 
             <div className="space-y-4">
               {fields.map((field, index) => (
@@ -503,25 +597,38 @@ function CategoryForm({ category, onClose, onSuccess }: CategoryFormProps) {
                 </div>
               ))}
             </div>
-          </div>
 
-          <div className="flex gap-3 pt-4">
+            {/* Add field lives at the bottom: with many fields you don't scroll
+                back up to add one more. */}
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-3 bg-surface border border-white/10 text-text-primary rounded-3xl font-medium transition-colors duration-200 hover:bg-white/5"
+              onClick={addField}
+              className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 border border-dashed border-white/15 rounded-2xl text-sm text-lime hover:text-green-secondary hover:border-lime/40 font-medium transition-colors duration-200"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-4 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-            >
-              {saving ? 'Saving...' : category ? 'Update' : 'Create'}
+              <Plus className="w-4 h-4" strokeWidth={2} />
+              Add field
             </button>
           </div>
         </form>
+
+        {/* Sticky footer so actions stay reachable without scrolling the whole modal. */}
+        <div className="sticky bottom-0 bg-card border-t border-white/5 px-6 py-4 flex gap-3 rounded-b-3xl">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-3 bg-surface border border-white/10 text-text-primary rounded-3xl font-medium transition-colors duration-200 hover:bg-white/5"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="category-form"
+            disabled={saving}
+            className="flex-1 px-4 py-3 bg-lime text-background rounded-3xl font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(184,255,54,0.35)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          >
+            {saving ? 'Saving...' : category ? 'Update' : 'Create'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-# [review:need-review] PHASE-01/27-streak-mode-endpoint
-# summary: added streak_mode (Literal build|avoid) to category base/update schemas
+# [review:need-review] PHASE-01/35-category-fields-update-web-ux
+# summary: CategoryUpdate.fields (FieldUpsert with optional id) for field diff-sync
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Literal
@@ -29,6 +29,18 @@ class FieldCreate(FieldBase):
     """Схема для создания поля"""
 
     pass
+
+
+class FieldUpsert(FieldBase):
+    """
+    Поле в пейлоаде обновления категории.
+
+    Существующие поля несут `id` — по нему бэкенд обновляет строку на месте
+    (сохраняя историю в entry_values). Поля без `id` создаются заново.
+    Поля, отсутствующие в списке, удаляются вместе со своей историей.
+    """
+
+    id: int | None = None
 
 
 class FieldUpdate(BaseModel):
@@ -86,6 +98,9 @@ class CategoryUpdate(BaseModel):
     display_mode: CategoryDisplayMode | None = None
     streak_mode: CategoryStreakMode | None = None
     group: str | None = Field(None, max_length=100)
+    # None (поле не прислано) — поля не трогаем. Список (в т.ч. пустой) —
+    # полный desired-state: синхронизируем существующие/новые/удалённые.
+    fields: list[FieldUpsert] | None = None
 
 
 class CategoryResponse(CategoryBase):

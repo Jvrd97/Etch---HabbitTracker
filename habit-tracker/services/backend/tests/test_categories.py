@@ -2,8 +2,8 @@
 Tests for Category CRUD operations.
 """
 
-# [review:need-review] PHASE-01/31-web-quickfixes-md-fab-checklist
-# summary: + tests for 422 on checklist mode without a boolean field (create & patch)
+# [review:need-review] PHASE-01/35-category-fields-update-web-ux
+# summary: + tests for PATCH field diff-sync (add/rename/remove, history, checklist)
 
 import pytest
 from httpx import AsyncClient
@@ -320,6 +320,133 @@ class TestCategoryUpdate:
             "/api/v1/categories/9999", json={"name": "New Name"}
         )
         assert response.status_code == 404
+
+    async def test_update_syncs_fields_add_rename_remove(self, client: AsyncClient):
+        """PATCH with `fields` renames existing (by id), adds new, drops omitted."""
+        create_response = await client.post(
+            "/api/v1/categories",
+            json={
+                "name": "Vitamins",
+                "fields": [
+                    {"name": "D3", "field_type": "boolean", "order": 0},
+                    {"name": "Zinc", "field_type": "boolean", "order": 1},
+                ],
+            },
+        )
+        category = create_response.json()
+        d3_id = category["fields"][0]["id"]
+        # Keep D3 (renamed, same id), drop Zinc, add Magnesium.
+        response = await client.patch(
+            f"/api/v1/categories/{category['id']}",
+            json={
+                "fields": [
+                    {
+                        "id": d3_id,
+                        "name": "Vitamin D3",
+                        "field_type": "boolean",
+                        "order": 0,
+                    },
+                    {"name": "Magnesium", "field_type": "boolean", "order": 1},
+                ]
+            },
+        )
+        assert response.status_code == 200
+        fields = {f["name"]: f for f in response.json()["fields"]}
+        assert set(fields) == {"Vitamin D3", "Magnesium"}
+        assert fields["Vitamin D3"]["id"] == d3_id  # same row, kept its id
+
+    async def test_update_fields_preserves_entry_history(self, client: AsyncClient):
+        """Renaming a field (same id) keeps existing entry values intact."""
+        create_response = await client.post(
+            "/api/v1/categories",
+            json={
+                "name": "Sleep",
+                "fields": [{"name": "Hours", "field_type": "number", "order": 0}],
+            },
+        )
+        category = create_response.json()
+        field_id = category["fields"][0]["id"]
+
+        await client.post(
+            "/api/v1/entries",
+            json={
+                "category_id": category["id"],
+                "entry_date": "2024-01-15",
+                "values": [{"field_id": field_id, "value": "8"}],
+            },
+        )
+
+        # Rename the field via category update (same id).
+        response = await client.patch(
+            f"/api/v1/categories/{category['id']}",
+            json={
+                "fields": [
+                    {
+                        "id": field_id,
+                        "name": "Sleep hours",
+                        "field_type": "number",
+                        "order": 0,
+                    }
+                ]
+            },
+        )
+        assert response.status_code == 200
+
+        entries = await client.get(f"/api/v1/entries?category_id={category['id']}")
+        values = entries.json()[0]["values"]
+        assert values[0]["field_id"] == field_id
+        assert values[0]["value"] == "8"
+
+    async def test_update_omitting_fields_leaves_them_untouched(
+        self, client: AsyncClient
+    ):
+        """PATCH without `fields` must not delete existing fields."""
+        create_response = await client.post(
+            "/api/v1/categories",
+            json={
+                "name": "Sleep",
+                "fields": [{"name": "Hours", "field_type": "number"}],
+            },
+        )
+        category_id = create_response.json()["id"]
+
+        response = await client.patch(
+            f"/api/v1/categories/{category_id}", json={"name": "Sleep tracker"}
+        )
+        assert response.status_code == 200
+        assert len(response.json()["fields"]) == 1
+
+    async def test_patch_to_checklist_with_boolean_field_in_same_call(
+        self, client: AsyncClient
+    ):
+        """Switching to checklist while adding a boolean field in one PATCH succeeds."""
+        create_response = await client.post(
+            "/api/v1/categories",
+            json={
+                "name": "Coffee",
+                "fields": [{"name": "Cups", "field_type": "number"}],
+            },
+        )
+        category = create_response.json()
+        cups_id = category["fields"][0]["id"]
+
+        response = await client.patch(
+            f"/api/v1/categories/{category['id']}",
+            json={
+                "display_mode": "checklist",
+                "fields": [
+                    {
+                        "id": cups_id,
+                        "name": "Cups",
+                        "field_type": "number",
+                        "order": 0,
+                    },
+                    {"name": "Had coffee", "field_type": "boolean", "order": 1},
+                ],
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["display_mode"] == "checklist"
 
 
 @pytest.mark.asyncio

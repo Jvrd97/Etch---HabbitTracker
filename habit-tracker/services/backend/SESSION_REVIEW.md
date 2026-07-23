@@ -243,3 +243,16 @@ Feedback loops: pytest 138/138 green, `mypy --strict app` clean, `ruff check` + 
 - `tests/test_idempotency.py` — **new**: 3 теста — повтор с тем же ключом → 200 + тот же id, без дубля в листинге; разные ключи → две записи; без заголовка → обычное создание каждый раз.
 
 Feedback loops (`TEST_DATABASE_URL=postgresql+asyncpg://habit_user:habit_pass@localhost:5433/habit_tracker_test`): pytest 142/142 green, `mypy --strict app` clean (39 файлов), `ruff check app tests` clean. Миграция upgrade+downgrade проверены на отдельной БД.
+
+## 2026-07-23 — PHASE-01/35 category-fields-update (баг «не работает update»)
+
+Файлов тронуто: 4 (0 new, 4 mod).
+
+- `app/schemas/category.py` — **mod**: новый `FieldUpsert(FieldBase)` с опциональным `id`; `CategoryUpdate.fields: list[FieldUpsert] | None = None`. `None` = поля не трогаем; список (в т.ч. `[]`) = desired-state.
+- `app/crud/category.py` — **mod**: `update_category` теперь diff-синхронизирует поля через `_sync_category_fields`: существующие (по `id`) обновляются на месте → **entry_values не теряются**; поля без id создаются; отсутствующие удаляются каскадно. Скаляры патчатся как раньше (`exclude={"fields"}`). `field_type` приводится к `FieldType(...)` (mypy strict).
+- `app/api/categories.py` — **mod**: PATCH-валидация checklist считает **результирующий** набор полей (`category_update.fields` если прислан, иначе `existing.fields`) — теперь можно переключить в checklist и добавить boolean-поле одним запросом.
+- `tests/test_categories.py` — **mod**: +5 тестов (rename/add/remove по id; сохранение истории entry_values при переименовании; PATCH без `fields` не трогает поля; checklist+boolean одним PATCH).
+
+Корень бага: `CategoryUpdate` не содержал `fields`, Pydantic молча их выкидывал → правки полей не сохранялись (PATCH 200, но no-op). Требует парного фикса на фронте (слать `id`).
+
+Feedback loops: pytest 146/146 green, `mypy --strict app` clean (39 файлов), `ruff check app tests` + `format --check` clean.

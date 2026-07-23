@@ -281,6 +281,9 @@ export interface Field {
 }
 
 export interface FieldCreate {
+  // Present only when editing an existing field: lets the backend diff-sync
+  // fields by id (update in place, preserve history) instead of replacing them.
+  id?: number;
   name: string;
   field_type: FieldType;
   is_required?: boolean;

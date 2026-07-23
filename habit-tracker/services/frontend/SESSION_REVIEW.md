@@ -195,3 +195,12 @@ Feedback loops: bun test 44/44 green, `tsc --noEmit` clean, eslint clean, `next 
 - `app/today/page.tsx` — **mod**: раскладка через `partitionTodayCategories`; avoid-категории рендерятся секцией «Streaks» из `AvoidStreakCard`, стрики грузятся отдельно (деградация до «—» при ошибке) и перезагружаются после срыва; empty-state учитывает avoid.
 
 Feedback loops: bun test 61/61 green, `tsc --noEmit` clean, eslint clean, `next build` green (10 роутов). Визуальный smoke в браузере не выполнен.
+
+## 2026-07-23 — PHASE-01/35 category web UX + фикс update полей
+
+Файлов тронуто: 2 (0 new, 2 mod).
+
+- `lib/api.ts` — **mod**: `FieldCreate.id?: number` — при редактировании фронт возит `id` существующих полей, чтобы бэкенд обновлял их на месте (парный фикс к PHASE-01/35 backend, без него правки полей не сохранялись).
+- `app/categories/page.tsx` — **mod**: (1) форма при редактировании кладёт `id` в поля; при создании стартует с одним пустым полем; сабмит переиндексирует `order` по позиции. (2) Кнопка «Add field» переехала вниз списка (широкая dashed-кнопка) — не нужно скроллить вверх при 20–30 полях. (3) Действия Cancel/Update вынесены в `sticky bottom-0` футер (submit через `form="category-form"`) — меньше скролла до кнопки на телефоне. (4) Переключатель вида карточки/список (segmented control, персист в `localStorage`); list-режим — компактные строки с цветной точкой, счётчиком полей и edit/delete справа, клик по строке ведёт на график.
+
+Feedback loops: bun test 61/61 green, `tsc --noEmit` clean, eslint clean. `next build` не гонял локально (проверено в CI). Визуальный smoke в браузере не выполнен.
