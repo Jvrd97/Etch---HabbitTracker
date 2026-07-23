@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/03-ios-scaffold-settings
-// summary: Settings state — server address in UserDefaults, API key in Keychain, connection check state machine
+// [review:need-review] PHASE-01/05-ios-today-quick-entry
+// summary: Settings state — server address in UserDefaults, API key in Keychain; base URL parsing via APIClient.makeBaseURL
 import Foundation
 
 @MainActor
@@ -56,8 +56,7 @@ final class SettingsViewModel: ObservableObject {
             return
         }
 
-        let trimmedAddress = serverAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let baseURL = URL(string: trimmedAddress), baseURL.scheme != nil, baseURL.host != nil else {
+        guard let baseURL = APIClient.makeBaseURL(from: serverAddress) else {
             connectionState = .failure("Invalid server address")
             return
         }
@@ -72,26 +71,9 @@ final class SettingsViewModel: ObservableObject {
             try await client.checkConnection()
             connectionState = .success
         } catch let error as APIClientError {
-            connectionState = .failure(Self.message(for: error))
+            connectionState = .failure(error.userMessage)
         } catch {
             connectionState = .failure("Unexpected error")
-        }
-    }
-
-    private static func message(for error: APIClientError) -> String {
-        switch error {
-        case .invalidBaseURL:
-            return "Invalid server address"
-        case .unauthorized:
-            return "Invalid API key (401)"
-        case .timeout:
-            return "Connection timed out"
-        case .transport(let code):
-            return "Network error (\(code))"
-        case .unexpectedStatus(let status):
-            return "Server returned status \(status)"
-        case .invalidResponse:
-            return "Invalid server response"
         }
     }
 }
