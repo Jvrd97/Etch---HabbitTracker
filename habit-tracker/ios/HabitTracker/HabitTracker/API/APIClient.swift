@@ -10,6 +10,12 @@ protocol TodayAPI {
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO
 }
 
+/// API surface needed by the Table screen; `APIClient` is the production implementation.
+protocol TableAPI {
+    func fetchTable(dateFrom: String, dateTo: String) async throws -> TableResponseDTO
+    func fetchEntries(categoryId: Int, date: String) async throws -> [EntryDTO]
+}
+
 /// Errors surfaced by `APIClient`, suitable for user-facing mapping.
 enum APIClientError: Error, Equatable {
     case invalidBaseURL
@@ -90,7 +96,7 @@ final class APIClient {
 
 // MARK: - TodayAPI (JSON endpoints under /api/v1)
 
-extension APIClient: TodayAPI {
+extension APIClient: TodayAPI, TableAPI {
     static let apiV1Path = "/api/v1"
 
     func fetchCategories() async throws -> [CategoryDTO] {
@@ -113,6 +119,27 @@ extension APIClient: TodayAPI {
 
     func upsertChecklistEntry(_ payload: ChecklistUpsertDTO) async throws -> EntryDTO {
         try await sendJSON(path: "/entries/checklist", method: "PUT", body: payload)
+    }
+
+    func fetchTable(dateFrom: String, dateTo: String) async throws -> TableResponseDTO {
+        try await getJSON(
+            path: "/table",
+            query: [
+                URLQueryItem(name: "date_from", value: dateFrom),
+                URLQueryItem(name: "date_to", value: dateTo),
+            ]
+        )
+    }
+
+    func fetchEntries(categoryId: Int, date: String) async throws -> [EntryDTO] {
+        try await getJSON(
+            path: "/entries",
+            query: [
+                URLQueryItem(name: "category_id", value: String(categoryId)),
+                URLQueryItem(name: "start_date", value: date),
+                URLQueryItem(name: "end_date", value: date),
+            ]
+        )
     }
 
     private func sendJSON<Body: Encodable, Response: Decodable>(

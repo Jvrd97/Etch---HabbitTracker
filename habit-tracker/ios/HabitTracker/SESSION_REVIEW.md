@@ -1,5 +1,21 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/06-ios-table-view
+
+Экран Table: табличный вид «дни × привычки». `TableViewModel` грузит `GET /api/v1/table` за последние 30 дней (по умолчанию), поддерживает подгрузку более старых страниц (`loadOlder`, мерж по датам без дублей) и достаёт исходные записи ячейки через `GET /entries?category_id&start_date&end_date`. Ядро — чистый маппинг `TableGrid(from: TableResponseDTO)`: колонка = категория (через primary field), строка = день (сортировка по убыванию даты), пустые дни/ячейки → `.empty`. UI: `Grid` с горизонтальным скроллом колонок, тап по непустой ячейке открывает `TableCellDetailSheet` с записями за день, из которых сложилось агрегированное значение. Новый таб Table в `TabView`. 14 новых unit-тестов (39 всего) зелёные на iPhone 17 Pro (iOS 26.2).
+
+Файлов тронуто: 9 (6 new, 3 mod).
+
+- `HabitTracker/Features/Table/TableGrid.swift` — new, чистый маппинг ответа в грид (columns/rows/cells), deep module.
+- `HabitTracker/Features/Table/TableViewModel.swift` — new, load/loadOlder state machine + fetchCellEntries, apiProvider из Settings.
+- `HabitTracker/Features/Table/TableView.swift` — new, грид с горизонтальным скроллом + детальный шит ячейки.
+- `HabitTracker/API/DTOs.swift` — mod, DTO табличного ответа (`TableResponseDTO`/`TableDayDTO`/`TableCellDTO`/`TableCategoryMetaDTO`).
+- `HabitTracker/API/APIClient.swift` — mod, протокол `TableAPI` + реализация (`fetchTable`, `fetchEntries(categoryId:date:)`).
+- `HabitTracker/App/HabitTrackerApp.swift` — mod, таб Table в TabView.
+- `HabitTrackerTests/TableGridMappingTests.swift` — new, 6 тестов маппинга (колонки, пустые дни/ячейки, типы полей, сортировка).
+- `HabitTrackerTests/TableViewModelTests.swift` — new, 6 тестов (30-дневный диапазон, пагинация older, ошибки, детали ячейки).
+- `HabitTrackerTests/TableAPIClientTests.swift` — new, 2 wire-теста (query `/table`, фильтр `/entries`).
+
 ## 2026-07-23 — PHASE-01/05-ios-today-quick-entry (round 2, правки по ревью)
 
 Ответ на замечания ревью первого раунда:

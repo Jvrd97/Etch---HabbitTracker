@@ -120,6 +120,38 @@ struct ChecklistUpsertDTO: Codable, Equatable {
     let values: [String: Bool]
 }
 
+/// Category metadata for the table view, as returned by `GET /api/v1/table`.
+/// `primaryField*` describes the single field surfaced as this category's column.
+struct TableCategoryMetaDTO: Codable, Identifiable, Equatable {
+    let id: Int
+    let name: String
+    let displayMode: String
+    let group: String?
+    let primaryFieldId: Int?
+    let primaryFieldName: String?
+    let primaryFieldType: String?
+}
+
+/// Aggregated value of one field for one day (see #04 aggregation rules).
+struct TableCellDTO: Codable, Equatable {
+    let categoryId: Int
+    let fieldId: Int
+    let aggregatedValue: String?
+    let entryCount: Int
+}
+
+/// One day of the table with its aggregated cells.
+struct TableDayDTO: Codable, Equatable {
+    let date: String
+    let cells: [TableCellDTO]
+}
+
+/// Response of `GET /api/v1/table?date_from&date_to`.
+struct TableResponseDTO: Codable, Equatable {
+    let categories: [TableCategoryMetaDTO]
+    let days: [TableDayDTO]
+}
+
 enum APIJSONCoding {
     /// Decoder matching the backend's snake_case JSON.
     static func makeDecoder() -> JSONDecoder {

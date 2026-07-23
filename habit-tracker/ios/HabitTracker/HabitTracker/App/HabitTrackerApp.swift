@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/05-ios-today-quick-entry
-// summary: app entry point — TabView with Today and Settings tabs
+// [review:need-review] PHASE-01/06-ios-table-view
+// summary: app entry point — TabView with Today, Table and Settings tabs
 import SwiftUI
 
 @main
@@ -10,6 +10,10 @@ struct HabitTrackerApp: App {
                 TodayView(viewModel: .live())
                     .tabItem {
                         Label("Today", systemImage: "checkmark.circle")
+                    }
+                TableView(viewModel: .live())
+                    .tabItem {
+                        Label("Table", systemImage: "tablecells")
                     }
                 SettingsView()
                     .tabItem {
