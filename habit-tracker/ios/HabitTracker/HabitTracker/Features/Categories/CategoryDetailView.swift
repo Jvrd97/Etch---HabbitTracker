@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/35-ios-category-detail
-// summary: Category detail screen — header (color/name/fields), quick-add of first field, date-sectioned history; edit form reuses the shared generic EntryEditView
+// [review:need-review] PHASE-01/36-ios-category-charts
+// summary: Category detail screen — header, quick-add, Swift Charts section (CategoryChartView), date-sectioned history; edit form reuses the shared generic EntryEditView
 import SwiftUI
 
 struct CategoryDetailView: View {
@@ -53,6 +53,11 @@ struct CategoryDetailView: View {
             Section {
                 header
                 quickAddRow
+            }
+            .listRowBackground(DS.Palette.card)
+
+            Section("Chart") {
+                CategoryChartView(viewModel: viewModel)
             }
             .listRowBackground(DS.Palette.card)
 

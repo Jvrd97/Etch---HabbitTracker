@@ -1,5 +1,5 @@
-// [review:need-review] PHASE-01/35-ios-category-detail
-// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI now refine a shared EntryMutationAPI base (list/patch/delete)
+// [review:need-review] PHASE-01/36-ios-category-charts
+// summary: URLSession async/await HTTP client; /api/v1 JSON; EntriesAPI/CategoryDetailAPI refine a shared EntryMutationAPI base (list/patch/delete); CategoryDetailAPI now also exposes GET /table for the category chart
 import Foundation
 
 /// API surface needed by the Today screen; `APIClient` is the production implementation.
@@ -41,10 +41,12 @@ protocol EntriesAPI: EntryMutationAPI {
 }
 
 /// API surface needed by the single-category detail screen; `APIClient` is the production
-/// implementation. Adds generic entry creation (quick-add) on top of the shared
+/// implementation. Adds generic entry creation (quick-add) and the aggregated
+/// `GET /table` feed (used to draw the category chart) on top of the shared
 /// mutation surface used for listing, editing, and deleting.
 protocol CategoryDetailAPI: EntryMutationAPI {
     func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO
+    func fetchTable(dateFrom: String, dateTo: String) async throws -> TableResponseDTO
 }
 
 /// API surface needed by the Dashboard screen; `APIClient` is the production implementation.

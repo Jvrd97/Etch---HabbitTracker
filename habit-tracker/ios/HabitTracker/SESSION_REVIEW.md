@@ -1,5 +1,25 @@
 # Session Review — iOS HabitTracker
 
+## 2026-07-23 — PHASE-01/36-ios-category-charts
+
+Графики на экране категории через Swift Charts, паритет с web `lib/chart-data.ts` / `chart-utils.ts`. Вся доменная логика вынесена в чистый, UI-free модуль `CategoryChart` (enum-namespace): серии по number/time-полям с юнитами и распределением по двум осям (первый юнит — левая ось, остальные — правая), парсинг агрегированных ячеек (`time` → минуты), per-day точки с null-гэпами, кумулятивная свёртка (running sum, null не ломает тотал, вход не мутируется), checklist-бары «X из N» и per-field стрики (сегодня-pending как в вебе), нарезка по периодам 7/30/90/all и годовое окно фетча `GET /table`. Модуль покрыт 24 unit-тестами в паритете с web-тестами.
+
+`CategoryDetailViewModel` расширен: `load()` теперь помимо истории записей тянет агрегированную таблицу (`GET /table` за год, сортировка по возрастанию даты) — сбой таблицы не роняет экран (график вторичен), лог без PII. Добавлены `@Published selectedPeriod`/`chartMode` и computed `chartSeries`/`linePoints`/`isChecklistChart`/`checklistBarPoints`/`fieldStreaks`; период нарезается до свёртки, поэтому кумулята стартует с нуля внутри окна. `CategoryDetailAPI` дополнен `fetchTable` (уже реализован в `APIClient` через `TableAPI`). UI `CategoryChartView`: сегмент-пикеры Period и Per day | Cumulative, мультилинии с легендой (`chartForegroundStyleScale`) для number/time-категорий; для checklist — лаймовый bar «X из N» + горизонтальная лента бейджей стриков. Стиль Lime Tech (лайм на тёмном).
+
+Осознанное ослабление: две оси показаны как две линии с общей осью Y (истинный dual-axis в Swift Charts дорог); легенда/цвета/юниты различают серии. Анимация «дорисовки» — вне скоупа по тикету.
+
+Вся сьюта (117 тестов, +27 к прошлым 90) зелёная на iPhone 17 (iOS 26.3). Сборка app-таргета (вкл. Swift Charts view) успешна.
+
+Файлов тронуто: 7 (3 new, 4 mod).
+
+- `HabitTracker/Features/Categories/CategoryChartData.swift` — new, чистый модуль `CategoryChart` + модели (`ChartPeriod`/`ChartMode`/`ChartAxis`/`ChartSeries`/`ChartPoint`/`ChecklistBarPoint`).
+- `HabitTracker/Features/Categories/CategoryChartView.swift` — new, Swift Charts UI (линии+легенда+тогглы / bar+стрики).
+- `HabitTrackerTests/CategoryChartDataTests.swift` — new, 24 unit-теста паритета с web.
+- `HabitTracker/Features/Categories/CategoryDetailViewModel.swift` — mod, загрузка таблицы + chart-состояние (период/режим/серии/бары/стрики).
+- `HabitTracker/Features/Categories/CategoryDetailView.swift` — mod, секция Chart с `CategoryChartView`.
+- `HabitTracker/API/APIClient.swift` — mod, `fetchTable` в протоколе `CategoryDetailAPI`.
+- `HabitTrackerTests/CategoryDetailViewModelTests.swift` — mod, `MockCategoryDetailAPI.fetchTable` + 3 chart-теста.
+
 ## 2026-07-23 — PHASE-01/35-ios-category-detail (round 2, правки по ревью)
 
 Ответ на замечание round 1 о дублировании между `CategoryDetailViewModel`/`CategoryEntryEditView` и `EntriesViewModel`/`EntryEditView`.

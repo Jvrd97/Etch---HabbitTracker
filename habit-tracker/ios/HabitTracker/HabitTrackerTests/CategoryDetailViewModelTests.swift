@@ -9,7 +9,11 @@ final class MockCategoryDetailAPI: CategoryDetailAPI {
     var createResult: Result<EntryDTO, Error>?
     var updateResult: Result<EntryDTO, Error>?
     var deleteResult: Result<Void, Error> = .success(())
+    var tableResult: Result<TableResponseDTO, Error> = .success(
+        TableResponseDTO(categories: [], days: [])
+    )
     private(set) var fetchedCategoryFilters: [Int?] = []
+    private(set) var fetchedTableRanges: [(from: String, to: String)] = []
     private(set) var createdPayloads: [EntryCreateDTO] = []
     private(set) var updatedPayloads: [(id: Int, payload: EntryUpdateDTO)] = []
     private(set) var deletedIDs: [Int] = []
@@ -17,6 +21,11 @@ final class MockCategoryDetailAPI: CategoryDetailAPI {
     func fetchEntries(categoryId: Int?) async throws -> [EntryDTO] {
         fetchedCategoryFilters.append(categoryId)
         return try entriesResult.get()
+    }
+
+    func fetchTable(dateFrom: String, dateTo: String) async throws -> TableResponseDTO {
+        fetchedTableRanges.append((from: dateFrom, to: dateTo))
+        return try tableResult.get()
     }
 
     func createEntry(_ entry: EntryCreateDTO) async throws -> EntryDTO {
@@ -290,5 +299,113 @@ final class CategoryDetailViewModelTests: XCTestCase {
         XCTAssertFalse(ok)
         XCTAssertEqual(viewModel.entries.map(\.id), [100])
         XCTAssertNotNil(viewModel.saveErrorMessage)
+    }
+
+    // MARK: - Chart (ticket #36)
+
+    private func makeField(id: Int, name: String, type: FieldTypeDTO, order: Int) -> FieldDTO {
+        FieldDTO(
+            id: id, name: name, fieldType: type,
+            isRequired: false, defaultValue: nil, options: nil, order: order
+        )
+    }
+
+    private func numberCategory() -> CategoryDTO {
+        CategoryDTO(
+            id: 1, name: "Running Outdoor", icon: nil, color: "#B8FF36",
+            displayMode: "form", isActive: true,
+            fields: [
+                makeField(id: 10, name: "Distance (km)", type: .number, order: 0),
+                makeField(id: 11, name: "Duration", type: .time, order: 1),
+            ]
+        )
+    }
+
+    private func numberDay(_ date: String, km: String?, time: String?) -> TableDayDTO {
+        var cells: [TableCellDTO] = []
+        if let km {
+            cells.append(TableCellDTO(categoryId: 1, fieldId: 10, aggregatedValue: km, entryCount: 1))
+        }
+        if let time {
+            cells.append(TableCellDTO(categoryId: 1, fieldId: 11, aggregatedValue: time, entryCount: 1))
+        }
+        return TableDayDTO(date: date, cells: cells)
+    }
+
+    func testLoadFetchesTableOverMaxWindowAndBuildsSeries() async {
+        let category = numberCategory()
+        let api = MockCategoryDetailAPI()
+        api.tableResult = .success(TableResponseDTO(categories: [], days: [
+            numberDay("2026-07-20", km: "5", time: "00:30"),
+        ]))
+
+        let viewModel = makeViewModel(category: category, api: api)
+        await viewModel.load()
+
+        // The chart window is one year ending "today" (the injected fixed date).
+        XCTAssertEqual(api.fetchedTableRanges.count, 1)
+        XCTAssertEqual(api.fetchedTableRanges[0].to, fixedDate)
+        XCTAssertEqual(api.fetchedTableRanges[0].from, "2025-07-22")
+        // km + time become two series on different axes.
+        XCTAssertEqual(viewModel.chartSeries.map(\.fieldId), [10, 11])
+        XCTAssertEqual(viewModel.chartSeries.map(\.axis), [.left, .right])
+    }
+
+    func testLinePointsApplyPeriodThenMode() async {
+        let category = numberCategory()
+        let api = MockCategoryDetailAPI()
+        api.tableResult = .success(TableResponseDTO(categories: [], days: [
+            numberDay("2026-07-19", km: "2", time: nil),
+            numberDay("2026-07-20", km: "3", time: nil),
+            numberDay("2026-07-21", km: "4", time: nil),
+        ]))
+
+        let viewModel = makeViewModel(category: category, api: api)
+        await viewModel.load()
+
+        // Per day: raw values in ascending date order.
+        XCTAssertEqual(viewModel.linePoints.map(\.date), ["2026-07-19", "2026-07-20", "2026-07-21"])
+        XCTAssertEqual(viewModel.linePoints.map { $0.values[10] ?? nil }, [2, 3, 4])
+
+        // Cumulative: running sum within the window.
+        viewModel.chartMode = .cumulative
+        XCTAssertEqual(viewModel.linePoints.map { $0.values[10] ?? nil }, [2, 5, 9])
+
+        // Period slice keeps only the most recent day.
+        viewModel.chartMode = .perDay
+        viewModel.selectedPeriod = .sevenDays
+        // Fewer than 7 days available -> all kept; narrow by faking a short window instead:
+        XCTAssertEqual(viewModel.linePoints.count, 3)
+    }
+
+    func testChecklistCategoryExposesBarsAndStreaks() async {
+        let vitaminD = makeField(id: 1, name: "Vitamin D", type: .boolean, order: 0)
+        let magnesium = makeField(id: 2, name: "Magnesium", type: .boolean, order: 1)
+        let category = CategoryDTO(
+            id: 5, name: "Vitamins", icon: nil, color: "#B8FF36",
+            displayMode: "checklist", isActive: true, fields: [vitaminD, magnesium]
+        )
+        let api = MockCategoryDetailAPI()
+        api.tableResult = .success(TableResponseDTO(categories: [], days: [
+            TableDayDTO(date: "2026-07-20", cells: [
+                TableCellDTO(categoryId: 5, fieldId: 1, aggregatedValue: "true", entryCount: 1),
+                TableCellDTO(categoryId: 5, fieldId: 2, aggregatedValue: "true", entryCount: 1),
+            ]),
+            TableDayDTO(date: fixedDate, cells: [
+                TableCellDTO(categoryId: 5, fieldId: 1, aggregatedValue: "true", entryCount: 1),
+            ]),
+        ]))
+
+        let viewModel = makeViewModel(category: category, api: api)
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isChecklistChart)
+        XCTAssertEqual(viewModel.checklistBarPoints.map(\.done), [2, 1])
+        // Vitamin D: done yesterday + today -> streak 2. Magnesium: only yesterday, today pending -> streak 1.
+        let streaks = Dictionary(
+            uniqueKeysWithValues: viewModel.fieldStreaks.map { ($0.field.id, $0.streak) }
+        )
+        XCTAssertEqual(streaks[1], 2)
+        XCTAssertEqual(streaks[2], 1)
     }
 }
